@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,7 +24,7 @@
 		qcom,smmu-cfg = <0x3>;
 
 		/* mhi bus specific settings */
-		mhi,max-channels = <106>;
+		mhi,max-channels = <107>;
 		mhi,timeout = <2000>;
 
 		mhi,pcie-renegotiation = <1>;
@@ -350,27 +351,27 @@
 				mhi,ee = <0x4>;
 			};
 
-			mhi_chan@104 {
-				reg = <104>;
-				label = "IP_HW_OFFLOAD_0";
-				mhi,event-ring = <4>;
-				mhi,chan-dir = <1>;
-				mhi,data-type = <3>;
-				mhi,ee = <0x4>;
-				mhi,offload-chan;
-				status = "disabled";
-			};
-
 			mhi_chan@105 {
 				reg = <105>;
-				label = "IP_HW_OFFLOAD_0";
-				mhi,event-ring = <5>;
-				mhi,chan-dir = <2>;
-				mhi,data-type = <3>;
+				label = "IP_HW_LLC";
+				mhi,num-elements = <2048>;
+				mhi,event-ring = <6>;
+				mhi,chan-dir = <1>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
-				mhi,offload-chan;
-				mhi,lpm-notify;
-				status = "disabled";
+				mhi,db-mode-switch;
+			};
+
+			mhi_chan@106 {
+				reg = <106>;
+				label = "IP_HW_LLC";
+				mhi,num-elements = <2048>;
+				mhi,event-ring = <7>;
+				mhi,chan-dir = <2>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x4>;
 			};
 		};
 
@@ -435,6 +436,29 @@
 				mhi,hw-ev;
 				mhi,client-manage;
 			};
+
+			mhi_event@6 {
+				reg = <6>;
+				mhi,num-elements = <3072>;
+				mhi,intmod = <0x80005>;
+				mhi,msi = <7>;
+				mhi,chan = <105>;
+				mhi,priority = <1>;
+				mhi,brstmode = <2>;
+				mhi,hw-ev;
+			};
+
+			mhi_event@7 {
+				reg = <7>;
+				mhi,num-elements = <3072>;
+				mhi,intmod = <0x80001>;
+				mhi,msi = <8>;
+				mhi,chan = <106>;
+				mhi,priority = <1>;
+				mhi,brstmode = <2>;
+				mhi,hw-ev;
+				mhi,client-manage;
+			};
 		};
 
 		mhi_devices {
@@ -469,7 +493,7 @@
 		qcom,smmu-cfg = <0x3>;
 
 		/* mhi bus specific settings */
-		mhi,max-channels = <106>;
+		mhi,max-channels = <107>;
 		mhi,timeout = <2000>;
 
 		#address-cells = <1>;
@@ -794,27 +818,27 @@
 				mhi,ee = <0x4>;
 			};
 
-			mhi_chan@104 {
-				reg = <104>;
-				label = "IP_HW_OFFLOAD_0";
-				mhi,event-ring = <4>;
-				mhi,chan-dir = <1>;
-				mhi,data-type = <3>;
-				mhi,ee = <0x4>;
-				mhi,offload-chan;
-				status = "disabled";
-			};
-
 			mhi_chan@105 {
 				reg = <105>;
-				label = "IP_HW_OFFLOAD_0";
-				mhi,event-ring = <5>;
-				mhi,chan-dir = <2>;
-				mhi,data-type = <3>;
+				label = "IP_HW_LLC";
+				mhi,num-elements = <2048>;
+				mhi,event-ring = <6>;
+				mhi,chan-dir = <1>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
-				mhi,offload-chan;
-				mhi,lpm-notify;
-				status = "disabled";
+				mhi,db-mode-switch;
+			};
+
+			mhi_chan@106 {
+				reg = <106>;
+				label = "IP_HW_LLC";
+				mhi,num-elements = <2048>;
+				mhi,event-ring = <7>;
+				mhi,chan-dir = <2>;
+				mhi,data-type = <0>;
+				mhi,doorbell-mode = <2>;
+				mhi,ee = <0x4>;
 			};
 		};
 
@@ -874,6 +898,29 @@
 				mhi,intmod = <0x80001>;
 				mhi,msi = <6>;
 				mhi,chan = <101>;
+				mhi,priority = <1>;
+				mhi,brstmode = <2>;
+				mhi,hw-ev;
+				mhi,client-manage;
+			};
+
+			mhi_event@6 {
+				reg = <6>;
+				mhi,num-elements = <3072>;
+				mhi,intmod = <0x80005>;
+				mhi,msi = <7>;
+				mhi,chan = <105>;
+				mhi,priority = <1>;
+				mhi,brstmode = <2>;
+				mhi,hw-ev;
+			};
+
+			mhi_event@7 {
+				reg = <7>;
+				mhi,num-elements = <3072>;
+				mhi,intmod = <0x80001>;
+				mhi,msi = <8>;
+				mhi,chan = <106>;
 				mhi,priority = <1>;
 				mhi,brstmode = <2>;
 				mhi,hw-ev;
