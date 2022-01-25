@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,6 +14,15 @@
 #define __FSM_DP_MHI_H__
 
 #include <linux/dma-mapping.h>
+#include <linux/mutex.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
+#include <linux/workqueue.h>
+#include <linux/device.h>
+#include <linux/cdev.h>
+#include <linux/netdevice.h>
+#include <linux/atomic.h>
+#include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/mhi.h>
 #include <linux/skbuff.h>
@@ -20,6 +30,7 @@
 #define FSM_DP_MHI_NAME	"fsm-l1rf-mhi"
 
 struct fsm_dp_drv;
+struct napi_struct;
 
 struct fsm_dp_mhi_stats {
 	unsigned long tx_cnt;
@@ -37,7 +48,10 @@ struct fsm_dp_mhi_stats {
 
 struct fsm_dp_mhi {
 	struct mhi_device *mhi_dev;
+	struct fsm_dp_drv *pdrv;
 	struct fsm_dp_mhi_stats stats;
+	struct napi_struct napi;
+	struct work_struct alloc_work;
 	spinlock_t rx_lock;
 	spinlock_t tx_lock;
 	/*
@@ -45,6 +59,7 @@ struct fsm_dp_mhi {
 	 * for mhi_queue_n_transfer.
 	 */
 	bool mhi_destroyed;
+	bool llc;
 	void *ul_buf_array[FSM_DP_MAX_IOV_SIZE];
 	size_t ul_size_array[FSM_DP_MAX_IOV_SIZE];
 	enum MHI_FLAGS ul_flag_array[FSM_DP_MAX_IOV_SIZE];
@@ -59,7 +74,7 @@ struct fsm_dp_mhi {
 int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv);
 void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv);
 
-int fsm_dp_mhi_rx_replenish(struct fsm_dp_drv *drv);
+int fsm_dp_mhi_rx_replenish(struct fsm_dp_drv *drv, struct fsm_dp_mhi *mhi);
 
 static inline int fsm_dp_mhi_skb_ul_xfer(
 	struct fsm_dp_mhi *mhi, struct sk_buff *skb)
