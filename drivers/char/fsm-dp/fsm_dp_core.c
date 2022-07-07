@@ -82,6 +82,9 @@ static void handle_rx_loopback(
 		drv->loopback.stats.rx_err++; /* update error stats */
 		fsm_dp_set_buf_state(msghdr,
 			FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP);
+		if (mempool->pf_enable)
+			fsm_dp_set_buf_ts(msghdr,
+				FSM_DP_DL_SEND_DMA_COMP_INDEX);
 		atomic_dec(&mempool->out_xmit);
 		goto free_rxbuf;
 	}
@@ -498,6 +501,14 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
 	fsm_dp_set_buf_state(msghdr,
 			FSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP);
 #endif
+	if (mempool->pf_enable)
+		fsm_dp_set_buf_ts(msghdr,
+			FSM_DP_UL_USER_IND_INDEX);
+	else {
+		struct fsm_dp_buf_cntrl *pf = (addr - FSM_DP_MSG_CNTL_BLK);
+
+		memset(&pf->ts[0], 0, sizeof(struct timespec)); /* inform apps */
+	}
 	offset = fsm_dp_get_mem_offset(addr, &mempool->mem.loc, cl);
 	if (fsm_dp_ring_write(&rxq->ring, offset, 0, (llc) ?
 			FSM_DP_RING_HIGH_PRIORITY :

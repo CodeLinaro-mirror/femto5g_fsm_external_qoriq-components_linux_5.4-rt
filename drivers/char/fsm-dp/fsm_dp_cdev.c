@@ -149,7 +149,6 @@ static int __cdev_tx(
 				atomic_inc_return(seqnum);
 			c_offset -= sizeof(struct fsm_dp_msghdr);
 		}
-#ifdef FSM_DP_BUFFER_FENCING
 		{
 			unsigned long b_backtrack;
 			struct fsm_dp_buf_cntrl *p;
@@ -158,6 +157,12 @@ static int __cdev_tx(
 			iov_off_array[n] = b_backtrack;
 			p = (struct fsm_dp_buf_cntrl *)
 				(iov[n].iov_base - b_backtrack);
+			if (mempool->pf_enable)
+				fsm_dp_set_buf_ts(
+					(unsigned char *)p +
+					sizeof(struct fsm_dp_buf_cntrl),
+					FSM_DP_DL_KERNEL_SEND_REQ_INDEX);
+#ifdef FSM_DP_BUFFER_FENCING
 			if (p->signature != FSM_DP_BUFFER_SIG) {
 				FSM_DP_ERROR("%s: mempool type %d buffer at "
 					"kernel addr %p corrupted, %x, exp %x\n",
@@ -177,9 +182,15 @@ static int __cdev_tx(
 				return -EINVAL;
 			}
 			p->state = FSM_DP_BUF_STATE_KERNEL_XMIT_DMA;
+			if (p->xmit_status == FSM_DP_XMIT_IN_PROGRESS)
+				FSM_DP_WARN(
+					"%s: buffer %llx xmit "
+					"in progress already. "
+					"xmit data may be corrupted.\n",
+					__func__, (u64) p);
 			p->xmit_status = FSM_DP_XMIT_IN_PROGRESS;
-		}
 #endif
+		}
 		atomic_inc(&mempool->out_xmit);
 		if (mempool->mem.loc.dma_mapped &&
 				cdev->tx_mode != TX_MODE_LOOPBACK) {

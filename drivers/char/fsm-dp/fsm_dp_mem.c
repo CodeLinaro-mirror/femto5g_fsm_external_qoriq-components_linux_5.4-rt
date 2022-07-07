@@ -665,6 +665,9 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 	mempool->drv = pdrv;
 	mempool->type = type;
 	mempool->signature = FSM_DP_MEMPOOL_SIG;
+	mempool->dl_traffic_profiling.wrap = false;
+	mempool->dl_traffic_profiling.next = 0;
+	mempool->pf_enable = 1;
 
 	/*
 	 * allocate dummy buffer for out of buffer condition

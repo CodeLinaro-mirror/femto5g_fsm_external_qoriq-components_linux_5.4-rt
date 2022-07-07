@@ -101,9 +101,10 @@ static int __mhi_rx_replenish(
 				buf = mempool->dummy_buf;
 			}
 			FSM_DP_ASSERT(!buf, "can not alloc buffer");
-			if (buf !=  mempool->dummy_buf)
+			if (buf !=  mempool->dummy_buf) {
 				fsm_dp_set_buf_state(buf,
 					FSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA);
+			}
 			mhi->ul_buf_array[i] = buf;
 			mhi->ul_size_array[i] = mempool->mem.buf_sz;
 			mhi->ul_flag_array[i] = MHI_EOT;
@@ -184,6 +185,12 @@ static void __mhi_ul_xfer_cb(
 		     __func__, result->buf_addr, result->dir,
 		     result->bytes_xferd, result->transaction_status);
 
+	if (!result->buf_addr) {
+		FSM_DP_ERROR("%s: reuslt buffer addr NULL, dir=%u bytes=%lu status=%d\n",
+		__func__, result->dir, result->bytes_xferd, result->transaction_status);
+		return;
+	}
+
 	mhi = mhi_device_get_devdata(mhi_dev);
 	drv = mhi->pdrv;
 
@@ -228,7 +235,6 @@ static void __mhi_ul_xfer_cb(
 		break;
 	default:
 		{
-#ifdef FSM_DP_BUFFER_FENCING
 			struct fsm_dp_buf_cntrl *p;
 			unsigned long cl_off;
 
@@ -236,12 +242,20 @@ static void __mhi_ul_xfer_cb(
 				mempool->mem.loc.cluster_kernel_addr[cl];
 			cl_off = cl_off % fsm_dp_buf_true_size(&mempool->mem);
 			p = (struct fsm_dp_buf_cntrl *) (addr - cl_off);
+#ifdef FSM_DP_BUFFER_FENCING
 			if (p->state == FSM_DP_BUF_STATE_KERNEL_XMIT_DMA)
 				p->state =
 					FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP;
 			p->xmit_status = FSM_DP_XMIT_OK;
-			wmb(); /* make it visible to other CPU */
 #endif
+			if (mempool->pf_enable) {
+				fsm_dp_set_buf_ts((unsigned char *)p +
+					sizeof(struct fsm_dp_buf_cntrl),
+					FSM_DP_DL_SEND_DMA_COMP_INDEX);
+				fsm_dp_save_dl_pkt_ts(mempool, p);
+			}
+
+			wmb(); /* make it visible to other CPU */
 		}
 		break;
 	}
@@ -275,6 +289,9 @@ static void __mhi_dl_xfer_cb(
 		fsm_dp_mempool_put_buf(mempool, result->buf_addr);
 	} else {
 		mhi->stats.rx_cnt++;
+		if (mempool->pf_enable)
+			fsm_dp_set_buf_ts(result->buf_addr,
+				FSM_DP_UL_DMA_COMP_INDEX);
 		fsm_dp_rx(drv, result->buf_addr, result->bytes_xferd, mhi->llc);
 	}
 }

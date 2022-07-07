@@ -101,6 +101,18 @@ struct fsm_dp_mempool_stats {
 #define FSM_DP_MEMPOOL_SIG 0xdeadbeef
 #define FSM_DP_MEMPOOL_SIG_BAD 0xbeefdead
 
+
+#define NUM_DL_PROFILING 256
+
+struct traffic_profiling_entry {
+	struct timespec ts[FSM_DP_TS];
+};
+struct fsm_dp_mempool_traffic_profiling {
+	bool wrap;
+	unsigned int next;
+	struct traffic_profiling_entry entry[NUM_DL_PROFILING];
+};
+
 struct fsm_dp_mempool {
 	unsigned int signature;
 	struct fsm_dp_drv *drv;
@@ -110,10 +122,11 @@ struct fsm_dp_mempool {
 	atomic_t ref;
 	atomic_t out_xmit;
 	struct fsm_dp_mempool_stats stats;
+	struct fsm_dp_mempool_traffic_profiling dl_traffic_profiling;
 	char *dummy_buf;
 	spinlock_t lock;
+	unsigned int pf_enable;
 };
-
 struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 	struct fsm_dp_drv *pdrv,
 	enum fsm_dp_mem_type type,
@@ -275,6 +288,14 @@ static inline void fsm_dp_set_buf_state(void *ptr, enum fsm_dp_buf_state state)
 	pf->state = state;
 }
 
+/* set buffer state, ptr: pointing to beginging of buffer user data */
+static inline void fsm_dp_set_buf_ts(void *ptr, int index)
+{
+	struct fsm_dp_buf_cntrl *pf = (ptr - FSM_DP_MSG_CNTL_BLK);
+
+	ktime_get_ts(&pf->ts[index]);
+}
+
 /* get true buffer size which includes size for user space and control  */
 static inline uint32_t fsm_dp_buf_true_size(struct fsm_dp_mem *mem)
 {
@@ -335,6 +356,20 @@ static inline unsigned long fsm_dp_get_mem_offset(void *addr,
 	offset = (char *) addr - loc->cluster_kernel_addr[cl];
 	offset += cl * FSM_DP_MEMPOOL_CLUSTER_SIZE;
 	return offset;
+}
+
+static inline void fsm_dp_save_dl_pkt_ts(struct fsm_dp_mempool *mempool,
+	struct fsm_dp_buf_cntrl *pf)
+{
+
+	memcpy(&mempool->dl_traffic_profiling.
+		entry[mempool->dl_traffic_profiling.next], &pf->ts[0],
+		sizeof(struct traffic_profiling_entry));
+	mempool->dl_traffic_profiling.next++;
+	if (mempool->dl_traffic_profiling.next  >= NUM_DL_PROFILING) {
+		mempool->dl_traffic_profiling.wrap = true;
+		mempool->dl_traffic_profiling.next = 0;
+	}
 }
 
 #endif /* __FSM_DP_MEM_H__ */
