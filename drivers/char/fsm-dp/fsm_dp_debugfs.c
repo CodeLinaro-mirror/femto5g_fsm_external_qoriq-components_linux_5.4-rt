@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -130,12 +131,33 @@ static int __fsm_dp_ring_runtime_dump(
 	struct seq_file *s,
 	struct fsm_dp_ring *ring)
 {
-	seq_printf(s, "ProdHdr:                %u\n", *ring->prod_head);
-	seq_printf(s, "ProdTail:               %u\n", *ring->prod_tail);
-	seq_printf(s, "ConsHdr:                %u\n", *ring->cons_head);
-	seq_printf(s, "ConsTail:               %u\n", *ring->cons_tail);
+	seq_printf(s, "ProdHdr:                %u\n",
+			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head);
+	seq_printf(s, "ProdTail:               %u\n",
+			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail);
+	seq_printf(s, "ConsHdr:                %u\n",
+			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_head);
+	seq_printf(s, "ConsTail:               %u\n",
+			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_tail);
 	seq_printf(s, "NumOfElementAvail:      %u\n",
-		   (*ring->prod_head - *ring->cons_tail) & (ring->size - 1));
+		   (*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head -
+			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_tail) &
+				(ring->num_ring_entries - 1));
+	if (ring->ring_type == FSM_DP_RING_TYPE_SINGLE)
+		return 0;
+	seq_printf(s, "High Priority:\n");
+	seq_printf(s, "    ProdHdr:            %u\n",
+			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_head);
+	seq_printf(s, "    ProdTail:           %u\n",
+			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_tail);
+	seq_printf(s, "    ConsHdr:            %u\n",
+			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_head);
+	seq_printf(s, "    ConsTail:           %u\n",
+			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_tail);
+	seq_printf(s, "    NumOfElementAvail:  %u\n",
+		   (*ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_head -
+			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_tail) &
+					(ring->num_ring_entries - 1));
 	return 0;
 }
 
@@ -143,16 +165,39 @@ static int __fsm_dp_ring_config_dump(
 	struct seq_file *s,
 	struct fsm_dp_ring *ring)
 {
-	seq_printf(s, "Ring %llx MemoryAlloc:\n", (u64) ring);
-	seq_printf(s, "         AllocAddr:     %llx\n", (u64) ring->loc.base);
-	seq_printf(s, "         AllocSize:     0x%08lx\n", ring->loc.size);
-	seq_printf(s, "         MmapCookie:    0x%08x\n", ring->loc.cookie);
-	seq_printf(s, "Size:                   0x%x\n", ring->size);
-	seq_printf(s, "ProdHdr:                %llx\n", (u64) ring->prod_head);
-	seq_printf(s, "ProdTail:               %llx\n", (u64) ring->prod_tail);
-	seq_printf(s, "ConsHdr:                %llx\n", (u64) ring->cons_head);
-	seq_printf(s, "ConsTail:               %llx\n", (u64) ring->cons_tail);
-	seq_printf(s, "RingBuf:                %llx\n", (u64) ring->element);
+	seq_printf(s, "Ring %llx MemoryAlloc:\n",
+			(u64) ring);
+	seq_printf(s, "         AllocAddr:     %llx\n",
+			(u64) ring->loc.base);
+	seq_printf(s, "         AllocSize:     0x%08lx\n",
+			ring->loc.size);
+	seq_printf(s, "         MmapCookie:    0x%08x\n",
+			ring->loc.cookie);
+	seq_printf(s, "Size:                   0x%x\n",
+			ring->num_ring_entries);
+	seq_printf(s, "ProdHdr:                %llx\n", (u64)
+			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head);
+	seq_printf(s, "ProdTail:               %llx\n", (u64)
+			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail);
+	seq_printf(s, "ConsHdr:                %llx\n", (u64)
+			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_head);
+	seq_printf(s, "ConsTail:               %llx\n", (u64)
+			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_tail);
+	seq_printf(s, "RingBuf:                %llx\n", (u64)
+			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].element);
+	if (ring->ring_type == FSM_DP_RING_TYPE_SINGLE)
+		return 0;
+	seq_printf(s, "High Priority:\n");
+	seq_printf(s, "    ProdHdr:            %llx\n", (u64)
+			ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_head);
+	seq_printf(s, "    ProdTail:           %llx\n", (u64)
+			ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_tail);
+	seq_printf(s, "    ConsHdr:            %llx\n", (u64)
+			ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_head);
+	seq_printf(s, "    ConsTail:           %llx\n", (u64)
+			ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_tail);
+	seq_printf(s, "    RingBuf:            %llx\n", (u64)
+			ring->ring[FSM_DP_RING_HIGH_PRIORITY].element);
 	return 0;
 }
 
@@ -467,7 +512,7 @@ static ssize_t debugfs_ring_index_write(
 	if (kstrtouint_from_user(buf, count, 0, &value))
 		return -EFAULT;
 
-	if (value >= mempool->ring.size)
+	if (value >= mempool->ring.num_ring_entries)
 		return -EINVAL;
 
 	__ring_index[mempool->type] = value;
@@ -485,7 +530,10 @@ static int debugfs_ring_data_read(struct seq_file *s, void *unused)
 	if (mempool) {
 		fsm_dp_ring_element_t *elem_p;
 
-		elem_p = (mempool->ring.element + __ring_index[mempool->type]);
+		elem_p =
+			(mempool->ring.ring
+				[FSM_DP_RING_NORMAL_PRIORITY].element
+					+ __ring_index[mempool->type]);
 
 		seq_printf(s, "0x%lx\n", elem_p->element_data);
 	}
@@ -609,24 +657,44 @@ static int debugfs_mhi_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
 	struct fsm_dp_mhi *mhi = &drv->mhi;
+	int i;
 
-	seq_printf(s, "MHIDevice:              %llx\n", (u64) mhi->mhi_dev);
-	seq_puts(s, "Stats:\n");
-	seq_printf(s, "    TX:                 %lu\n", mhi->stats.tx_cnt);
-	seq_printf(s, "    TX_ACKED:           %lu\n", mhi->stats.tx_acked);
-	seq_printf(s, "    TX_ERR:             %lu\n", mhi->stats.tx_err);
-	seq_printf(s, "    RX:                 %lu\n", mhi->stats.rx_cnt);
-	seq_printf(s, "    RX_ERR:             %lu\n", mhi->stats.rx_err);
-	seq_printf(s, "    RX_OUT_OF_BUF:      %lu\n",
-		   mhi->stats.rx_out_of_buf);
-	seq_printf(s, "    RX_REPLENISH:       %lu\n",
-		   mhi->stats.rx_replenish);
-	seq_printf(s, "    RX_REPLENISH_ERR:   %lu\n",
-		   mhi->stats.rx_replenish_err);
-	seq_printf(s, "    RX_OUTOFBUF_DROP:   %lu\n",
-		   mhi->stats.rx_outofbuf_drop);
-	seq_printf(s, "    RX_OUTOFBUF_RESYNC: %lu\n",
-		   mhi->stats.rx_resync);
+	for (i = 0; i < 2; i++) {
+		if (!mhi->mhi_dev)
+			goto next;
+		else
+			seq_printf(s, "MHIDevice: %s ,",
+					mhi->mhi_dev->chan_name);
+		if (mhi->mhi_destroyed)
+			seq_printf(s, " OFF\n");
+		else
+			seq_printf(s, " ON\n");
+		seq_puts(s, "  Stats:\n");
+		seq_printf(s, "    TX:                 %lu\n",
+						mhi->stats.tx_cnt);
+		seq_printf(s, "    TX_ACKED:           %lu\n",
+						mhi->stats.tx_acked);
+		seq_printf(s, "    TX_ERR:             %lu\n",
+						mhi->stats.tx_err);
+		seq_printf(s, "    RX:                 %lu\n",
+						mhi->stats.rx_cnt);
+		seq_printf(s, "    RX_ERR:             %lu\n",
+						mhi->stats.rx_err);
+		seq_printf(s, "    RX_OUT_OF_BUF:      %lu\n",
+			mhi->stats.rx_out_of_buf);
+		seq_printf(s, "    RX_REPLENISH:       %lu\n",
+			mhi->stats.rx_replenish);
+		seq_printf(s, "    RX_REPLENISH_ERR:   %lu\n",
+			mhi->stats.rx_replenish_err);
+		seq_printf(s, "    RX_OUTOFBUF_DROP:   %lu\n",
+			mhi->stats.rx_outofbuf_drop);
+		seq_printf(s, "    RX_OUTOFBUF_RESYNC: %lu\n",
+			mhi->stats.rx_resync);
+next:
+		if (i == 0)
+			mhi = &drv->mhi_llc;
+	}
+
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_mhi, debugfs_mhi_show, NULL);
@@ -668,12 +736,7 @@ static int debugfs_drv_status_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
 	struct fsm_dp_core_stats *stats = &drv->stats;
-	struct fsm_dp_mhi *mhi = &drv->mhi;
 
-	if (mhi->mhi_dev && !mhi->mhi_destroyed)
-		seq_printf(s, "MHIDevice: ON\n");
-	else
-		seq_printf(s, "MHIDevice: OFF\n");
 	seq_printf(s, "TX:             %lu\n", stats->tx_cnt);
 	seq_printf(s, "TX_ERR:         %lu\n", stats->tx_err);
 	seq_printf(s, "RX:             %lu\n", stats->rx_cnt);
@@ -1200,13 +1263,9 @@ static int debugfs_create_mempool_dir(
 	return 0;
 }
 
-/*pdrv pointing to an array of fsm_dp_drv. */
 int fsm_dp_debugfs_init(struct fsm_dp_drv *drv)
 {
 	struct dentry *entry = NULL;
-	struct dentry *dentry = NULL;
-	char string[10];
-	int i;
 
 	if (unlikely(drv == NULL))
 		return -EINVAL;
@@ -1218,51 +1277,43 @@ int fsm_dp_debugfs_init(struct fsm_dp_drv *drv)
 	if (IS_ERR(__dent))
 		return -ENOMEM;
 
-
 	entry = debugfs_create_file("driver", 0444, __dent, drv,
 				    &debugfs_drv_ops);
-
 	if (!entry)
 		goto err;
 
-
-	for (i = 0; i < MAX_FSM_DP_DEVICE; i++, drv++) {
-		snprintf(string, sizeof(string), "FSM-%d", i + 1);
-		dentry = debugfs_create_dir(string, __dent);
-		if (!dentry)
-			goto err;
-		entry = debugfs_create_file("cdev", 0444, dentry, drv,
+	entry = debugfs_create_file("cdev", 0444, __dent, drv,
 				    &debugfs_cdev_ops);
-		if (!entry)
-			goto err;
+	if (!entry)
+		goto err;
 
-		entry = debugfs_create_file("mhi", 0444, dentry, drv,
+	entry = debugfs_create_file("mhi", 0444, __dent, drv,
 				    &debugfs_mhi_ops);
-		if (!entry)
-			goto err;
+	if (!entry)
+		goto err;
 
-		entry = debugfs_create_file("status", 0444, dentry, drv,
+	entry = debugfs_create_file("status", 0444, __dent, drv,
 				    &debugfs_drv_status_ops);
-		if (!entry)
-			goto err;
+	if (!entry)
+		goto err;
 
-		if (debugfs_create_mempool_dir(dentry, drv))
-			goto err;
+	if (debugfs_create_mempool_dir(__dent, drv))
+		goto err;
 
-		if (debugfs_create_rxq_dir(dentry, drv))
-			goto err;
+	if (debugfs_create_rxq_dir(__dent, drv))
+		goto err;
 
-		if (debugfs_create_loopback_dir(dentry, drv))
-			goto err;
+	if (debugfs_create_loopback_dir(__dent, drv))
+		goto err;
 
-		if (debugfs_create_traffic_dir(dentry, drv))
-			goto err;
+	if (debugfs_create_traffic_dir(__dent, drv))
+		goto err;
 
 #ifdef CONFIG_FSM_DP_TEST
-		if (debugfs_create_testring_dir(dentry, drv))
-			goto err;
+	if (debugfs_create_testring_dir(__dent, drv))
+		goto err;
 #endif
-	}
+
 	return 0;
 err:
 	debugfs_remove_recursive(__dent);

@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,15 +30,14 @@ struct fsm_dp_kernel_register_db_entry fsm_dp_reg_db[FSM_DP_NUM_MSG_TYPE];
 #define DEFAULT_TEST_RING_SIZE 2048
 #define TEST_RING_MMAP_COOKIE	0x80000000
 
-
-
 static int fsm_dp_test_init(struct fsm_dp_drv *pdrv)
 {
 	int ret;
 
 	ret = fsm_dp_ring_init(&pdrv->test_ring.ring,
 			       DEFAULT_TEST_RING_SIZE,
-			       TEST_RING_MMAP_COOKIE);
+			       TEST_RING_MMAP_COOKIE,
+			       FSM_DP_RING_TYPE_SINGLE);
 	return ret;
 }
 
@@ -59,7 +59,8 @@ static void fsm_dp_test_cleanup(struct fsm_dp_drv *pdrv)
 static void handle_rx_loopback(
 	struct fsm_dp_drv *drv,
 	struct iovec *iov,
-	unsigned int num)
+	unsigned int num,
+	bool llc)
 {
 	struct fsm_dp_msghdr *msghdr;
 	int ret;
@@ -74,7 +75,8 @@ static void handle_rx_loopback(
 		atomic_inc(&mempool->out_xmit);
 		dma_addr_array[i] = 0;
 	}
-	ret = fsm_dp_tx(drv, iov, num, 0, dma_addr_array);
+	ret = fsm_dp_tx(drv, iov, num, (llc) ? FSM_DP_TX_FLAG_LLC : 0,
+							dma_addr_array);
 	if (ret) {
 		FSM_DP_DEBUG("%s: failed to send response\n", __func__);
 		drv->loopback.stats.rx_err++; /* update error stats */
@@ -157,7 +159,9 @@ static void handle_tx_loopback(
 #ifdef FSM_DP_BUFFER_FENCING
 	fsm_dp_set_buf_state(dst, FSM_DP_BUF_STATE_KERNEL_RECVCMP_MSGQ_TO_APP);
 #endif
-	if (fsm_dp_ring_write(&rxq->ring, offset, 0)) {
+	if (fsm_dp_ring_write(&rxq->ring, offset, 0, (job->llc) ?
+			FSM_DP_RING_HIGH_PRIORITY :
+				FSM_DP_RING_NORMAL_PRIORITY)) {
 		drv->loopback.stats.tx_err++;
 		FSM_DP_ERROR("%s: rx enqueue failed!\n", __func__);
 		fsm_dp_mempool_put_buf(mempool, dst);
@@ -184,6 +188,7 @@ static void loopback_cb(struct work_struct *work)
 	struct fsm_dp_loopback_job *job;
 	unsigned long flags;
 	struct iovec iov[FSM_DP_MAX_IOV_SIZE];
+	bool llc = false;
 	int num = 0;
 
 	INIT_LIST_HEAD(&q);
@@ -201,12 +206,20 @@ static void loopback_cb(struct work_struct *work)
 
 		list_for_each_entry(job, &q, list) {
 			if (job->rx_loopback) {
+				if (num == 0)
+					llc = job->llc;
+				else if (llc != job->llc) {
+					handle_rx_loopback(drv, iov,
+						num, llc);
+					num = 0;
+					llc = job->llc;
+				}
 				iov[num].iov_base = job->data;
 				iov[num].iov_len = job->length;
 				num++;
 				if (num >= FSM_DP_MAX_IOV_SIZE) {
 					handle_rx_loopback(drv, iov,
-						num);
+						num, llc);
 					num = 0;
 				}
 			} else
@@ -214,7 +227,7 @@ static void loopback_cb(struct work_struct *work)
 		}
 	}
 	if (num)
-		handle_rx_loopback(drv, iov, num);
+		handle_rx_loopback(drv, iov, num, llc);
 }
 
 static int tx_loopback(
@@ -282,7 +295,8 @@ static int tx_loopback(
 static int rx_loopback(
 	struct fsm_dp_drv *pdrv,
 	void *data,
-	unsigned int length)
+	unsigned int length,
+	bool llc)
 {
 	struct fsm_dp_loopback_task *task;
 	struct fsm_dp_loopback_job *job;
@@ -298,6 +312,7 @@ static int rx_loopback(
 		job->data = data;
 		job->length = length;
 		job->rx_loopback = true;
+		job->llc = llc;
 		list_add_tail(&job->list, &task->job_q);
 		task->stats.rx_enque++;
 	}
@@ -384,7 +399,8 @@ static int fsm_dp_rxqueue_init(
 	if (!ring_size)
 		return -EINVAL;
 
-	ret = fsm_dp_ring_init(&rxq->ring, ring_size, MMAP_RX_COOKIE(rx_type));
+	ret = fsm_dp_ring_init(&rxq->ring, ring_size, MMAP_RX_COOKIE(rx_type),
+			FSM_DP_RING_TYPE_DOUBLE);
 	if (ret) {
 		FSM_DP_DEBUG("%s: failed to initialize rx ring!\n", __func__);
 		return ret;
@@ -407,7 +423,8 @@ static void fsm_dp_rxqueue_cleanup(struct fsm_dp_rxqueue *rxq)
 	}
 }
 
-void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length)
+void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
+		bool llc)
 {
 	struct fsm_dp_mempool *mempool;
 	struct fsm_dp_rxqueue *rxq;
@@ -423,7 +440,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length)
 		return;
 	}
 
-	pf = addr - FSM_DP_L1_CACHE_BYTES;
+	pf = addr - FSM_DP_MSG_CNTL_BLK;
 	start = fsm_dp_traffic_ts_begin();
 
 	mempool = fsm_dp_find_mempool(pdrv, addr, false, &cl);
@@ -453,7 +470,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length)
 	}
 	switch (msghdr->type) {
 	case FSM_DP_MSG_TYPE_LPBK_REQ:
-		if (rx_loopback(pdrv, addr, length))
+		if (rx_loopback(pdrv, addr, length, llc))
 			goto free_rxbuf;
 		goto done;
 	case FSM_DP_MSG_TYPE_LPBK_RSP:
@@ -490,7 +507,9 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length)
 
 	fsm_dp_traffic_ts_ul_end_and_collect(&pdrv->traffic, pf, start);
 
-	if (fsm_dp_ring_write(&rxq->ring, offset, 0)) {
+	if (fsm_dp_ring_write(&rxq->ring, offset, 0, (llc) ?
+			FSM_DP_RING_HIGH_PRIORITY :
+				FSM_DP_RING_NORMAL_PRIORITY)) {
 		FSM_DP_ERROR("%s: failed to enqueue rx packet\n", __func__);
 		goto free_rxbuf;
 	}
@@ -603,7 +622,6 @@ void fsm_dp_deregister_kernel_client(
 };
 EXPORT_SYMBOL(fsm_dp_deregister_kernel_client);
 
-/* only supports the first FSM */
 void *fsm_dp_register_kernel_client(
 	enum fsm_dp_msg_type msg_type,
 	int (*tx_cmplt_cb)(struct sk_buff *skb),
@@ -688,6 +706,7 @@ int fsm_dp_tx(
 	int ret, n;
 	unsigned int num, to_send;
 	int j;
+	struct fsm_dp_mhi *mhi;
 
 	if (unlikely(!pdrv || !iov || !iov_nr))
 		return -EINVAL;
@@ -706,8 +725,11 @@ int fsm_dp_tx(
 		}
 		return 0;
 	}
-
-	if (!fsm_dp_mhi_is_ready(&pdrv->mhi)) {
+	if (flag & FSM_DP_TX_FLAG_LLC)
+		mhi = &pdrv->mhi_llc;
+	else
+		mhi = &pdrv->mhi;
+	if (!fsm_dp_mhi_is_ready(mhi)) {
 		FSM_DP_ERROR("%s: mhi is not ready!\n", __func__);
 		pdrv->stats.tx_err++;
 		return -EIO;
@@ -719,7 +741,7 @@ int fsm_dp_tx(
 			return -EINVAL;
 		}
 	}
-	spin_lock_bh(&pdrv->mhi.tx_lock);
+	spin_lock_bh(&mhi->tx_lock);
 	to_send = 0;
 	for (n = 0, to_send = iov_nr; to_send > 0; ) {
 		if (to_send > FSM_DP_MAX_IOV_SIZE)
@@ -728,21 +750,20 @@ int fsm_dp_tx(
 			num = to_send;
 		for (j = 0; j < num; j++) {
 			if ((flag & FSM_DP_TX_FLAG_SG) && n != (iov_nr - 1))
-				pdrv->mhi.dl_flag_array[j] = MHI_CHAIN;
+				mhi->dl_flag_array[j] = MHI_CHAIN;
 			else
-				pdrv->mhi.dl_flag_array[j] =  MHI_EOT;
-			pdrv->mhi.dl_size_array[j] = iov[n].iov_len;
-			pdrv->mhi.dl_buf_array[j] = iov[n].iov_base;
+				mhi->dl_flag_array[j] =  MHI_EOT;
+			mhi->dl_size_array[j] = iov[n].iov_len;
+			mhi->dl_buf_array[j] = iov[n].iov_base;
 			if (dma_addr_array[n]) {
-				pdrv->mhi.dl_flag_array[j] |=
+				mhi->dl_flag_array[j] |=
 					MHI_FLAGS_DMA_ADDR;
-				pdrv->mhi.dl_dma_addr_array[j] =
+				mhi->dl_dma_addr_array[j] =
 					dma_addr_array[n];
 			}
 			n++;
 		}
-		ret = fsm_dp_mhi_n_tx(&pdrv->mhi,
-				    num);
+		ret = fsm_dp_mhi_n_tx(mhi, num);
 		if (ret) {
 			pdrv->stats.tx_err++;
 			break;
@@ -754,50 +775,39 @@ int fsm_dp_tx(
 		pdrv->stats.tx_cnt += (iov_nr - to_send);
 	else if (!to_send)
 		pdrv->stats.tx_cnt++;
-	spin_unlock_bh(&pdrv->mhi.tx_lock);
+	spin_unlock_bh(&mhi->tx_lock);
 	return ret;
 }
 
-/* pdrv pointing to an array of fsm_dp_drv. */
 static int fsm_dp_core_init(struct fsm_dp_drv *pdrv)
 {
 	struct device *dev = pdrv->dev;
 	int ret;
-	struct fsm_dp_drv *p;
-	int i;
 
 	mutex_init(&pdrv->mempool_lock);
 
-	of_dma_configure(dev, dev->of_node, true);
+	ret = of_dma_configure(dev, dev->of_node, false);
 
-	for (i = 0, p = pdrv; i < MAX_FSM_DP_DEVICE; i++, p++) {
-		ret = fsm_dp_rx_init(p);
-		if (ret)
-			goto exit;
+	ret = fsm_dp_rx_init(pdrv);
+	if (ret)
+		goto exit;
 
-		ret = fsm_dp_loopback_init(&p->loopback);
-		if (ret)
-			goto exit;
+	ret = fsm_dp_loopback_init(&pdrv->loopback);
+	if (ret)
+		goto exit;
 
-		ret = fsm_dp_test_init(p);
-	}
+	ret = fsm_dp_test_init(pdrv);
 
 exit:
 	of_node_put(dev->of_node);
 	return ret;
 }
 
-/* pdrv pointing to an array of fsm_dp_drv. */
 static void fsm_dp_core_cleanup(struct fsm_dp_drv *pdrv)
 {
-	struct fsm_dp_drv *p;
-	int i;
-
-	for (i = 0, p = pdrv; i < MAX_FSM_DP_DEVICE; i++, p++) {
-		fsm_dp_rx_cleanup(p);
-		fsm_dp_loopback_cleanup(&p->loopback);
-		fsm_dp_test_cleanup(p);
-	}
+	fsm_dp_rx_cleanup(pdrv);
+	fsm_dp_loopback_cleanup(&pdrv->loopback);
+	fsm_dp_test_cleanup(pdrv);
 	kfree(pdrv);
 }
 
@@ -805,10 +815,12 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 {
 	int rx_work = 0;
 	struct fsm_dp_drv *pdrv;
+	struct fsm_dp_mhi *mhi;
 	int ret;
 
-	pdrv = container_of(napi, struct fsm_dp_drv, napi);
-	rx_work = mhi_poll(pdrv->mhi.mhi_dev, budget);
+	mhi = container_of(napi, struct fsm_dp_mhi, napi);
+	pdrv = mhi->pdrv;
+	rx_work = mhi_poll(mhi->mhi_dev, budget);
 	if (rx_work < 0) {
 		rx_work = 0;
 		pr_err("Error polling ret:%d\n", rx_work);
@@ -816,9 +828,9 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 		goto exit_poll;
 	}
 
-	ret = fsm_dp_mhi_rx_replenish(pdrv);
+	ret = fsm_dp_mhi_rx_replenish(pdrv, mhi);
 	if (ret == -ENOMEM)
-		schedule_work(&pdrv->alloc_work);  /* later */
+		schedule_work(&mhi->alloc_work);  /* later */
 	if (rx_work < budget)
 		napi_complete(napi);
 	else
@@ -830,14 +842,16 @@ exit_poll:
 static void fsm_dp_alloc_work(struct work_struct *work)
 {
 	struct fsm_dp_drv *pdrv;
+	struct fsm_dp_mhi *mhi;
 	const int sleep_ms =  1000;
 	int retry = 60;
 	int ret;
 
-	pdrv = container_of(work, struct fsm_dp_drv, alloc_work);
+	mhi = container_of(work, struct fsm_dp_mhi, alloc_work);
+	pdrv = mhi->pdrv;
 
 	do {
-		ret = fsm_dp_mhi_rx_replenish(pdrv);
+		ret = fsm_dp_mhi_rx_replenish(pdrv, mhi);
 		/* sleep and try again */
 		if (ret == -ENOMEM) {
 			msleep(sleep_ms);
@@ -846,22 +860,18 @@ static void fsm_dp_alloc_work(struct work_struct *work)
 	} while (ret == -ENOMEM && retry);
 }
 
-/* pdrv pointing to an array of fsm_dp_drv. */
 static int fsm_dp_probe(struct platform_device *pdev)
 {
 	struct fsm_dp_drv *pdrv, *p;
 	int ret;
-	int i;
 
 	pr_info("FSM-DP: probing FSM\n");
 
-	pdrv = kzalloc(MAX_FSM_DP_DEVICE * sizeof(*pdrv), GFP_KERNEL);
+	pdrv = kzalloc(sizeof(*pdrv), GFP_KERNEL);
 	if (IS_ERR(pdrv))
 		return -ENOMEM;
 
-	for (i = 0, p = pdrv; i < MAX_FSM_DP_DEVICE; i++, p++)
-		p->dev = &pdev->dev;
-
+	pdrv->dev = &pdev->dev;
 	fsm_dp_pdrv = pdrv;
 
 	ret = fsm_dp_core_init(pdrv);
@@ -882,13 +892,20 @@ static int fsm_dp_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, pdrv);
 
-	for (i = 0, p = pdrv; i < MAX_FSM_DP_DEVICE; i++, p++) {
-		init_dummy_netdev(&p->dummy_dev);
-		netif_napi_add(&p->dummy_dev, &p->napi, fsm_dp_poll,
+	p = pdrv;
+	init_dummy_netdev(&p->dummy_dev);
+
+	p->mhi.pdrv = p;
+	p->mhi_llc.pdrv = p;
+	netif_napi_add(&p->dummy_dev, &p->mhi.napi, fsm_dp_poll,
 						FSM_DP_NAPI_WEIGHT);
-		napi_enable(&p->napi);
-		INIT_WORK(&p->alloc_work, fsm_dp_alloc_work);
-	}
+	napi_enable(&p->mhi.napi);
+	INIT_WORK(&p->mhi.alloc_work, fsm_dp_alloc_work);
+
+	netif_napi_add(&p->dummy_dev, &p->mhi_llc.napi, fsm_dp_poll,
+						FSM_DP_NAPI_WEIGHT);
+	napi_enable(&p->mhi_llc.napi);
+	INIT_WORK(&p->mhi_llc.alloc_work, fsm_dp_alloc_work);
 
 	pr_info("FSM-DP: module initialized now\n");
 	return 0;
@@ -904,26 +921,24 @@ cleanup:
 	return ret;
 }
 
-/* pdrv pointing to an array of fsm_dp_drv. */
 static int fsm_dp_remove(struct platform_device *pdev)
 {
 	struct fsm_dp_drv *pdrv = platform_get_drvdata(pdev);
-	struct fsm_dp_drv *p;
-	int i;
+
 	if (pdrv) {
-		for (i = 0, p = pdrv; i < MAX_FSM_DP_DEVICE; i++, p++) {
-			if (p) {
-				flush_work(&p->alloc_work);
-				napi_disable(&p->napi);
-				netif_napi_del(&p->napi);
-			}
-		}
+		flush_work(&pdrv->mhi.alloc_work);
+		napi_disable(&pdrv->mhi.napi);
+		netif_napi_del(&pdrv->mhi.napi);
+		flush_work(&pdrv->mhi_llc.alloc_work);
+		napi_disable(&pdrv->mhi_llc.napi);
+		netif_napi_del(&pdrv->mhi_llc.napi);
 		fsm_dp_cdev_cleanup(pdrv);
 		fsm_dp_mhi_cleanup(pdrv);
 		fsm_dp_debugfs_cleanup(pdrv);
 		fsm_dp_core_cleanup(pdrv);
 	}
 	fsm_dp_pdrv = NULL;
+
 	return 0;
 }
 
