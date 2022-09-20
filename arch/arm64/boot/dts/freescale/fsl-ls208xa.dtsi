@@ -194,56 +194,56 @@
 		cluster1_core0_watchdog: wdt@c000000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc000000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
 		cluster1_core1_watchdog: wdt@c010000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc010000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
 		cluster2_core0_watchdog: wdt@c100000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc100000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
 		cluster2_core1_watchdog: wdt@c110000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc110000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
 		cluster3_core0_watchdog: wdt@c200000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc200000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
 		cluster3_core1_watchdog: wdt@c210000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc210000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
 		cluster4_core0_watchdog: wdt@c300000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc300000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
 		cluster4_core1_watchdog: wdt@c310000 {
 			compatible = "arm,sp805-wdt", "arm,primecell";
 			reg = <0x0 0xc310000 0x0 0x1000>;
-			clocks = <&clockgen 4 31>, <&clockgen 4 31>;
+			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "apb_pclk", "wdog_clk";
 		};
 
@@ -284,11 +284,6 @@
 				reg	   = <0x40000 0x10000>;
 				interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
 			};
-		};
-
-		console@8340020 {
-			compatible = "fsl,dpaa2-console";
-			reg = <0x00000000 0x08340020 0 0x2>;
 		};
 
 		ptp-timer@8b95000 {
@@ -526,7 +521,7 @@
 		};
 
 		/* TODO: WRIOP (CCSR?) */
-		emdio1: mdio@8B96000 { /* WRIOP0: 0x8B8_0000,
+		emdio1: mdio@8b96000 { /* WRIOP0: 0x8B8_0000,
 					  * E-MDIO1: 0x1_6000
 					  */
 			compatible = "fsl,fman-memac-mdio";
@@ -539,7 +534,7 @@
 			#size-cells = <0>;
 		};
 
-		emdio2: mdio@8B97000 { /* WRIOP0: 0x8B8_0000,
+		emdio2: mdio@8b97000 { /* WRIOP0: 0x8B8_0000,
 					  * E-MDIO2: 0x1_7000
 					  */
 			compatible = "fsl,fman-memac-mdio";
@@ -610,105 +605,19 @@
 		};
 
 		qspi: spi@20c0000 {
-			compatible = "fsl,ls2080a-qspi";
+			status = "disabled";
+			compatible = "fsl,ls2080a-qspi", "fsl,ls1021a-qspi";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x20c0000 0x0 0x10000>,
 			      <0x0 0x20000000 0x0 0x10000000>;
 			reg-names = "QuadSPI", "QuadSPI-memory";
-			interrupts = <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <0 25 0x4>; /* Level high type */
 			clocks = <&clockgen 4 3>, <&clockgen 4 3>;
 			clock-names = "qspi_en", "qspi";
-			status = "disabled";
 		};
 
-		pcie1: pcie@3400000 {
-			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
-			reg-names = "regs", "config";
-			interrupts = <0 108 0x4>; /* aer interrupt */
-			interrupt-names = "aer";
-			#address-cells = <3>;
-			#size-cells = <2>;
-			device_type = "pci";
-			dma-coherent;
-			num-viewport = <6>;
-			bus-range = <0x0 0xff>;
-			msi-parent = <&its>;
-			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */
-			#interrupt-cells = <1>;
-			interrupt-map-mask = <0 0 0 7>;
-			interrupt-map = <0000 0 0 1 &gic 0 0 0 109 4>,
-					<0000 0 0 2 &gic 0 0 0 110 4>,
-					<0000 0 0 3 &gic 0 0 0 111 4>,
-					<0000 0 0 4 &gic 0 0 0 112 4>;
-			status = "disabled";
-		};
 
-		pcie2: pcie@3500000 {
-			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
-			reg-names = "regs", "config";
-			interrupts = <0 113 0x4>; /* aer interrupt */
-			interrupt-names = "aer";
-			#address-cells = <3>;
-			#size-cells = <2>;
-			device_type = "pci";
-			dma-coherent;
-			num-viewport = <6>;
-			bus-range = <0x0 0xff>;
-			msi-parent = <&its>;
-			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */
-			#interrupt-cells = <1>;
-			interrupt-map-mask = <0 0 0 7>;
-			interrupt-map = <0000 0 0 1 &gic 0 0 0 114 4>,
-					<0000 0 0 2 &gic 0 0 0 115 4>,
-					<0000 0 0 3 &gic 0 0 0 116 4>,
-					<0000 0 0 4 &gic 0 0 0 117 4>;
-			status = "disabled";
-		};
-
-		pcie3: pcie@3600000 {
-			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
-			reg-names = "regs", "config";
-			interrupts = <0 118 0x4>; /* aer interrupt */
-			interrupt-names = "aer";
-			#address-cells = <3>;
-			#size-cells = <2>;
-			device_type = "pci";
-			dma-coherent;
-			num-viewport = <256>;
-			bus-range = <0x0 0xff>;
-			msi-parent = <&its>;
-			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */
-			#interrupt-cells = <1>;
-			interrupt-map-mask = <0 0 0 7>;
-			interrupt-map = <0000 0 0 1 &gic 0 0 0 119 4>,
-					<0000 0 0 2 &gic 0 0 0 120 4>,
-					<0000 0 0 3 &gic 0 0 0 121 4>,
-					<0000 0 0 4 &gic 0 0 0 122 4>;
-			status = "disabled";
-		};
-
-		pcie4: pcie@3700000 {
-			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
-			reg-names = "regs", "config";
-			interrupts = <0 123 0x4>; /* aer interrupt */
-			interrupt-names = "aer";
-			#address-cells = <3>;
-			#size-cells = <2>;
-			device_type = "pci";
-			dma-coherent;
-			num-viewport = <6>;
-			bus-range = <0x0 0xff>;
-			msi-parent = <&its>;
-			iommu-map = <0 &smmu 0 1>;	/* This is fixed-up by u-boot */
-			#interrupt-cells = <1>;
-			interrupt-map-mask = <0 0 0 7>;
-			interrupt-map = <0000 0 0 1 &gic 0 0 0 124 4>,
-					<0000 0 0 2 &gic 0 0 0 125 4>,
-					<0000 0 0 3 &gic 0 0 0 126 4>,
-					<0000 0 0 4 &gic 0 0 0 127 4>;
-			status = "disabled";
-		};
 
 		sata0: sata@3200000 {
 			status = "disabled";
@@ -730,7 +639,7 @@
 
 		usb0: usb3@3100000 {
 			status = "disabled";
-			compatible = "fsl,ls2088a-dwc3", "snps,dwc3";
+			compatible = "snps,dwc3";
 			reg = <0x0 0x3100000 0x0 0x10000>;
 			interrupts = <0 80 0x4>; /* Level high type */
 			dr_mode = "host";
@@ -742,7 +651,7 @@
 
 		usb1: usb3@3110000 {
 			status = "disabled";
-			compatible = "fsl,ls2088a-dwc3", "snps,dwc3";
+			compatible = "snps,dwc3";
 			reg = <0x0 0x3110000 0x0 0x10000>;
 			interrupts = <0 81 0x4>; /* Level high type */
 			dr_mode = "host";
@@ -787,11 +696,35 @@
 		little-endian;
 	};
 
+	pps {
+		gpios = <&gpio3 18 0>;
+		assert-falling-edge;
+		compatible = "pps-gpio";
+		status = "disabled";
+	};
+
+	tti {
+		gpios = <
+			&gpio3 17 0 /*FSM 1 */
+			&gpio3 18 0 /*FSM 2 */
+			>;
+		assert-falling-edge;
+		compatible = "tti-gpio";
+		status = "okay";
+	};
+
 	firmware {
 		optee {
 			compatible = "linaro,optee-tz";
 			method = "smc";
 		};
+	};
+
+	qcom,fsm-dp {
+		compatible = "qcom,fsm-dp";
+		qcom,ul-bufs = <65471 4096>;
+		qcom,rx-queue-size = <1024 1024 1024 1024>;
+		dma-coherent;
 	};
 };
 
