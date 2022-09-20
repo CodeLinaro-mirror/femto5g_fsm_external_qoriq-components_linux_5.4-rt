@@ -7,6 +7,7 @@
 /dts-v1/;
 
 #include "fsl-lx2160a.dtsi"
+#include "external-modem-pcie.dtsi"
 
 / {
 	model = "NXP Layerscape LX2160ARDB";
@@ -74,32 +75,6 @@
 	status = "okay";
 };
 
-&fspi {
-	status = "okay";
-
-	mt35xu512aba0: flash@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "spansion,m25p80";
-		m25p,fast-read;
-		spi-max-frequency = <50000000>;
-		reg = <0>;
-		spi-rx-bus-width = <8>;
-		spi-tx-bus-width = <8>;
-	};
-
-	mt35xu512aba1: flash@1 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "spansion,m25p80";
-		m25p,fast-read;
-		spi-max-frequency = <50000000>;
-		reg = <1>;
-		spi-rx-bus-width = <8>;
-		spi-tx-bus-width = <8>;
-	};
-};
-
 &i2c0 {
 	status = "okay";
 
@@ -152,20 +127,30 @@
 	};
 };
 
-&sata0 {
+&fspi {
 	status = "okay";
-};
 
-&sata1 {
-	status = "okay";
-};
+	mt35xu512aba0: flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <8>;
+	};
 
-&sata2 {
-	status = "okay";
-};
-
-&sata3 {
-	status = "okay";
+	mt35xu512aba1: flash@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "spansion,m25p80";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <1>;
+		spi-rx-bus-width = <8>;
+		spi-tx-bus-width = <8>;
+	};
 };
 
 &uart0 {
@@ -220,12 +205,12 @@
 
 &dpmac3 {
 	phy-handle = <&aquantia_phy1>;
-	phy-connection-type = "usxgmii";
+	phy-connection-type = "xgmii";
 };
 
 &dpmac4 {
 	phy-handle = <&aquantia_phy2>;
-	phy-connection-type = "usxgmii";
+	phy-connection-type = "xgmii";
 };
 
 &dpmac5 {
@@ -244,4 +229,20 @@
 &dpmac18 {
 	phy-handle = <&rgmii_phy2>;
 	phy-connection-type = "rgmii-id";
+};
+
+&sata0 {
+	status = "okay";
+};
+
+&sata1 {
+	status = "okay";
+};
+
+&sata2 {
+	status = "okay";
+};
+
+&sata3 {
+	status = "okay";
 };
