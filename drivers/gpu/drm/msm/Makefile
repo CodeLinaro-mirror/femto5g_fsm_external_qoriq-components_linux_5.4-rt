@@ -24,7 +24,6 @@ msm-y := \
 	hdmi/hdmi_phy_8960.o \
 	hdmi/hdmi_phy_8x60.o \
 	hdmi/hdmi_phy_8x74.o \
-	edp/edp.o \
 	edp/edp_aux.o \
 	edp/edp_bridge.o \
 	edp/edp_connector.o \
@@ -77,10 +76,7 @@ msm-y := \
 	msm_atomic.o \
 	msm_atomic_tracepoints.o \
 	msm_debugfs.o \
-	msm_drv.o \
-	msm_fb.o \
 	msm_fence.o \
-	msm_gem.o \
 	msm_gem_prime.o \
 	msm_gem_shrinker.o \
 	msm_gem_submit.o \
@@ -98,7 +94,6 @@ msm-$(CONFIG_DEBUG_FS) += adreno/a5xx_debugfs.o
 
 msm-$(CONFIG_DRM_MSM_GPU_STATE)	+= adreno/a6xx_gpu_state.o
 
-msm-$(CONFIG_DRM_FBDEV_EMULATION) += msm_fbdev.o
 msm-$(CONFIG_COMMON_CLK) += disp/mdp4/mdp4_lvds_pll.o
 msm-$(CONFIG_COMMON_CLK) += hdmi/hdmi_pll_8960.o
 msm-$(CONFIG_COMMON_CLK) += hdmi/hdmi_phy_8996.o
