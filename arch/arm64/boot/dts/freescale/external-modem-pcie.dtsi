@@ -11,6 +11,7 @@
  * GNU General Public License for more details.
  */
 
+
 &pcie_rc1 {
 	#address-cells=<5>;
 	#size-cells=<0>;
@@ -151,6 +152,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@15 {
@@ -162,6 +164,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@16 {
@@ -173,6 +176,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@17 {
@@ -184,6 +188,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@18 {
@@ -243,6 +248,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@23 {
@@ -254,6 +260,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@25 {
@@ -267,6 +274,7 @@
 				mhi,ee = <0x2>;
 				mhi,auto-queue;
 				mhi,auto-start;
+				status = "disabled";
 			};
 
 			mhi_chan@26 {
@@ -278,6 +286,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@27 {
@@ -289,6 +298,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@32 {
@@ -300,6 +310,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@33 {
@@ -311,6 +322,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@100 {
@@ -344,6 +356,7 @@
 				mhi,data-type = <3>;
 				mhi,ee = <0x4>;
 				mhi,offload-chan;
+				status = "disabled";
 			};
 
 			mhi_chan@105 {
@@ -355,6 +368,7 @@
 				mhi,ee = <0x4>;
 				mhi,offload-chan;
 				mhi,lpm-notify;
+				status = "disabled";
 			};
 		};
 
@@ -428,6 +442,7 @@
 				mhi,chan = "IP_HW0";
 				mhi,interface-name = "rmnet_mhi";
 				mhi,mru = <0x4000>;
+				status = "disabled";
 			};
 
 			mhi_netdev_1: mhi_rmnet@1 {
@@ -435,6 +450,7 @@
 				mhi,chan = "IP_HW_ADPL";
 				mhi,interface-name = "rmnet_mhi";
 				mhi,mru = <0x4000>;
+				status = "disabled";
 			};
 		};
 	};
@@ -578,6 +594,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@15 {
@@ -589,6 +606,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@16 {
@@ -600,6 +618,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@17 {
@@ -611,6 +630,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@18 {
@@ -670,6 +690,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@23 {
@@ -681,6 +702,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@25 {
@@ -694,6 +716,7 @@
 				mhi,ee = <0x2>;
 				mhi,auto-queue;
 				mhi,auto-start;
+				status = "disabled";
 			};
 
 			mhi_chan@26 {
@@ -705,6 +728,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@27 {
@@ -716,6 +740,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@32 {
@@ -727,6 +752,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@33 {
@@ -738,6 +764,7 @@
 				mhi,data-type = <0>;
 				mhi,doorbell-mode = <2>;
 				mhi,ee = <0x4>;
+				status = "disabled";
 			};
 
 			mhi_chan@100 {
@@ -771,6 +798,7 @@
 				mhi,data-type = <3>;
 				mhi,ee = <0x4>;
 				mhi,offload-chan;
+				status = "disabled";
 			};
 
 			mhi_chan@105 {
@@ -782,6 +810,7 @@
 				mhi,ee = <0x4>;
 				mhi,offload-chan;
 				mhi,lpm-notify;
+				status = "disabled";
 			};
 		};
 
@@ -855,6 +884,7 @@
 				mhi,chan = "IP_HW0";
 				mhi,interface-name = "rmnet_mhi";
 				mhi,mru = <0x4000>;
+				status = "disabled";
 			};
 
 			mhi_netdev_3: mhi_rmnet@1 {
@@ -862,6 +892,7 @@
 				mhi,chan = "IP_HW_ADPL";
 				mhi,interface-name = "rmnet_mhi";
 				mhi,mru = <0x4000>;
+				status = "disabled";
 			};
 		};
 	};
