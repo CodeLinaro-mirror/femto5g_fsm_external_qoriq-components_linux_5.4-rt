@@ -242,4 +242,9 @@ static inline bool arch_timer_have_evtstrm_feature(void)
 {
 	return cpu_have_named_feature(EVTSTRM);
 }
+
+static inline notrace u64 arch_counter_get_cntvct(void)
+{
+	return __arch_counter_get_cntvct();
+}
 #endif
