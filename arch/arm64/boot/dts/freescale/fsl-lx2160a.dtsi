@@ -865,7 +865,8 @@
 			compatible = "snps,dwc3";
 			reg = <0x0 0x3110000 0x0 0x10000>;
 			interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
-			dr_mode = "host";
+			dr_mode = "peripheral";
+			maximum-speed = "super-speed";
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
@@ -1399,7 +1400,7 @@
 
 	qcom,fsm-dp {
 		compatible = "qcom,fsm-dp";
-		qcom,ul-bufs = <65471 4096>;
+		qcom,ul-bufs = <65280 4096>;
 		qcom,rx-queue-size = <1024 1024 1024 1024>;
 		dma-coherent;
 	};

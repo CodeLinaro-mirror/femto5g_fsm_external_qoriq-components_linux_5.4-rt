@@ -284,7 +284,7 @@ static inline void fsm_dp_collect_ts_dl_traffic_window(
 
 	if (traffic->traffic_timestamp && traffic->dl_traffic_collect &&
 		!traffic->dl_traffic_collect_done) {
-		start = *((ktime_t *)(&pbuf->ts));
+		start = *((ktime_t *)(&pbuf->ts[0]));
 		if (traffic->dl_traffic_index >= 0) {
 			struct fsm_dp_time_stamp *pt;
 
@@ -310,7 +310,7 @@ static inline void fsm_dp_traffic_ts_store_dl_msg(
 	ktime_t msg_start)
 {
 	if (traffic->traffic_timestamp)
-		*((ktime_t *)(&pbuf->ts)) = msg_start;
+		*((ktime_t *)(&pbuf->ts[0])) = msg_start;
 };
 
 static inline void fsm_dp_traffic_ts_dl_end(
@@ -342,7 +342,7 @@ static inline void fsm_dp_traffic_ts_ul_end_and_collect(
 	if (!traffic->traffic_timestamp)
 		return;
 	end = ktime_get();
-	pbuf->ts = ktime_to_timespec(end);
+	pbuf->ts[0] = ktime_to_timespec(end);
 	service = end - msg_start;
 	traffic->ul_cnt++;
 	traffic->ul_ktime += service;

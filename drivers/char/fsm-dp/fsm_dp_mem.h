@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -255,7 +256,7 @@ static inline unsigned int calc_ring_size(unsigned int elements)
 /* set buffer state, ptr: pointing to beginging of buffer user data */
 static inline void fsm_dp_set_buf_state(void *ptr, enum fsm_dp_buf_state state)
 {
-	struct fsm_dp_buf_cntrl *pf = (ptr - FSM_DP_L1_CACHE_BYTES);
+	struct fsm_dp_buf_cntrl *pf = (ptr - FSM_DP_MSG_CNTL_BLK);
 
 	pf->state = state;
 }

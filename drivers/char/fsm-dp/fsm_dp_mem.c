@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -438,7 +439,7 @@ static int fsm_dp_mem_init(
 
 	mem->buf_cnt = bufcnt;
 	mem->buf_sz = ALIGN(bufsz, cache_line_size());
-	mem->buf_overhead_sz = FSM_DP_L1_CACHE_BYTES;
+	mem->buf_overhead_sz = FSM_DP_MSG_CNTL_BLK;
 
 	num_buf_cl = FSM_DP_MEMPOOL_CLUSTER_SIZE / fsm_dp_buf_true_size(mem);
 	num_cl = bufcnt / num_buf_cl;
@@ -506,7 +507,7 @@ static int fsm_dp_mem_get_cfg(
 
 	cfg->buf_sz = mem->buf_sz;
 	cfg->buf_cnt = mem->buf_cnt;
-	cfg->buf_overhead_sz = FSM_DP_L1_CACHE_BYTES;
+	cfg->buf_overhead_sz = FSM_DP_MSG_CNTL_BLK;
 	cfg->cluster_size = FSM_DP_MEMPOOL_CLUSTER_SIZE;
 	cfg->num_cluster = mem->loc.num_cluster;
 	cfg->buf_per_cluster = mem->loc.buf_per_cluster;
@@ -723,14 +724,18 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 {
 	struct fsm_dp_mempool *mempool;
 	unsigned int ring_sz;
+	unsigned int max_buf_sz;
+
+	max_buf_sz = (type == FSM_DP_MEM_TYPE_UL) ? FSM_DP_MAX_UL_MSG_LEN :
+				FSM_DP_MAX_DL_MSG_LEN;
 
 	if (unlikely(!buf_sz || !buf_cnt || !fsm_dp_mem_type_is_valid(type)))
 		return NULL;
-	if (unlikely(((ULONG_MAX) / (buf_sz + FSM_DP_L1_CACHE_BYTES) < buf_cnt)))
+	if (unlikely(((ULONG_MAX) / (buf_sz + FSM_DP_MSG_CNTL_BLK) < buf_cnt)))
 		return NULL;
-	if (buf_sz > FSM_DP_MAX_DL_MSG_LEN) {
+	if (buf_sz > max_buf_sz) {
 		FSM_DP_ERROR("%s: mempool alloc buffer size %d exceeds limit %d\n",
-			__func__, buf_sz, FSM_DP_MAX_DL_MSG_LEN);
+			__func__, buf_sz, max_buf_sz);
 		return NULL;
 	}
 	if (pdrv->mhi.mhi_destroyed) {
