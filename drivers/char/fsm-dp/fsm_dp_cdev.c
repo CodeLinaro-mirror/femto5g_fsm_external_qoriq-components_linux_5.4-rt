@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -90,7 +91,8 @@ static int __cdev_tx(
 	struct fsm_dp_cdev *cdev,
 	struct iovec __user *uiov,
 	unsigned int iov_nr,
-	bool sg)
+	bool sg,
+	bool llc)
 {
 	struct fsm_dp_drv *pdrv = cdev->pdrv;
 	struct fsm_dp_mempool_vma *mempool_vma;
@@ -133,11 +135,18 @@ static int __cdev_tx(
 					&cluster,
 					&c_offset);
 		if (!sg || !n) {
+
+			atomic_t *seqnum;
+
 			iov[n].iov_base = (char *)iov[n].iov_base -
 				sizeof(struct fsm_dp_msghdr);
 			iov[n].iov_len += sizeof(struct fsm_dp_msghdr);
+			if (llc)
+				seqnum = &pdrv->tx_seqnum_llc;
+			else
+				seqnum = &pdrv->tx_seqnum;
 			((struct fsm_dp_msghdr *)iov[n].iov_base)->sequence =
-				atomic_inc_return(&pdrv->tx_seqnum);
+				atomic_inc_return(seqnum);
 			c_offset -= sizeof(struct fsm_dp_msghdr);
 		}
 #ifdef FSM_DP_BUFFER_FENCING
@@ -193,6 +202,8 @@ static int __cdev_tx(
 		flag |= FSM_DP_TX_FLAG_SG;
 	if (cdev->tx_mode == TX_MODE_LOOPBACK)
 		flag |= FSM_DP_TX_FLAG_LOOPBACK;
+	if (llc)
+		flag |= FSM_DP_TX_FLAG_LLC;
 
 	ret = fsm_dp_tx(pdrv, iov, iov_nr, flag, dma_addr);
 
@@ -282,7 +293,7 @@ static int __cdev_ioctl_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, false);
+	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, false, false);
 	return ret;
 }
 
@@ -297,7 +308,37 @@ static int __cdev_ioctl_sg_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, true);
+	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, true, false);
+	return ret;
+}
+
+static int __cdev_ioctl_tx_llc(struct fsm_dp_cdev *cdev, unsigned long ioarg)
+{
+	struct iovec iov;
+	int ret;
+
+	if (copy_from_user(&iov, (void __user *)ioarg, sizeof(iov)))
+		return -EFAULT;
+
+	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
+		return -EINVAL;
+
+	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, false, true);
+	return ret;
+}
+
+static int __cdev_ioctl_sg_tx_llc(struct fsm_dp_cdev *cdev, unsigned long ioarg)
+{
+	struct iovec iov;
+	int ret;
+
+	if (copy_from_user(&iov, (void __user *)ioarg, sizeof(iov)))
+		return -EFAULT;
+
+	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
+		return -EINVAL;
+
+	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, true, true);
 	return ret;
 }
 
@@ -345,7 +386,8 @@ static int __cdev_ioctl_testring_write(
 
 	if (drv->test_ring.enable)
 		ret = fsm_dp_ring_write(&test_ring->ring,
-				     TEST_RING_WRITE_MAGIC_VALUE, 0);
+				     TEST_RING_WRITE_MAGIC_VALUE,
+					FSM_DP_RING_NORMAL_PRIORITY);
 	return ret;
 }
 
@@ -428,6 +470,12 @@ static long fsm_dp_cdev_ioctl(
 	case FSM_DP_IOCTL_TX_MODE_CONFIG:
 		ret = __cdev_ioctl_txmode_cfg(cdev, ioarg);
 		break;
+	case FSM_DP_IOCTL_TX_LLC:
+		ret = __cdev_ioctl_tx_llc(cdev, ioarg);
+		break;
+	case FSM_DP_IOCTL_SG_TX_LLC:
+		ret = __cdev_ioctl_sg_tx_llc(cdev, ioarg);
+		break;
 #ifdef CONFIG_FSM_DP_TEST
 	case FSM_DP_IOCTL_TEST_RING_WRITE:
 		ret = __cdev_ioctl_testring_write(cdev, ioarg);
@@ -435,6 +483,7 @@ static long fsm_dp_cdev_ioctl(
 	case FSM_DP_IOCTL_TEST_RING_GET_CONFIG:
 		ret = __cdev_ioctl_testring_getcfg(cdev, ioarg);
 		break;
+
 #endif
 	default:
 		break;
