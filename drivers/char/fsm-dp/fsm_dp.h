@@ -26,7 +26,6 @@
 #include <linux/netdevice.h>
 #include <linux/atomic.h>
 #include <linux/workqueue.h>
-
 #include <linux/fsm_dp_ioctl.h>
 
 #include "fsm_dp_mhi.h"
@@ -192,6 +191,7 @@ struct fsm_dp_drv {
 	struct fsm_dp_rxqueue rxq[FSM_DP_RX_TYPE_LAST];
 	struct fsm_dp_loopback_task loopback;
 	struct fsm_dp_core_stats stats;
+	struct work_struct alloc_work;
 	unsigned int fsm_dp_outbuf_drop_sync;
 	fsm_dp_ring_index_t fsm_dp_prev_ul_prod_tail;
 
