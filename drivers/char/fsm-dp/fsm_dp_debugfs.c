@@ -836,11 +836,11 @@ static int debugfs_mhi_show(struct seq_file *s, void *unused)
 	int i;
 
 	for (i = 0; i < 2; i++) {
-		if (!mhi->mhi_dev)
+		if (IS_ERR_OR_NULL(mhi))
 			goto next;
 		else
 			seq_printf(s, "MHIDevice: %s ,",
-					mhi->mhi_dev->chan_name);
+					(mhi->llc ? "IP_HW_LLC" : "IP_HW0"));
 		if (mhi->mhi_destroyed)
 			seq_printf(s, " OFF\n");
 		else

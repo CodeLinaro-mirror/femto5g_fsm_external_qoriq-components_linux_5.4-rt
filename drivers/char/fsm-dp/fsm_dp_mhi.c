@@ -306,8 +306,11 @@ static void __mhi_status_cb(struct mhi_device *mhi_dev, enum MHI_CB mhi_cb)
 
 	switch (mhi_cb) {
 	case MHI_CB_DEVICE_DESTROYED:
-		FSM_DP_WARN("%s: mhi device destroyed\n", __func__);
-		pdrv->mhi.mhi_destroyed = true;
+		FSM_DP_WARN("%s: mhi%s device destroyed\n", __func__, (mhi->llc ? " LLC" : ""));
+		if (mhi->llc)
+			pdrv->mhi_llc.mhi_destroyed = true;
+		else
+			pdrv->mhi.mhi_destroyed = true;
 		wmb();
 		fsm_dp_mempool_dev_destroy(pdrv);
 		break;
