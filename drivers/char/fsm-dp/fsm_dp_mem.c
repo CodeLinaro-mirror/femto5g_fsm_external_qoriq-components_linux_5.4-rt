@@ -212,7 +212,6 @@ void *fsm_dp_ex_ring_init(
 	unsigned int ringid)
 {
 	struct fsm_dp_ring *ring;
-
 	ring =   kzalloc(sizeof(*ring), GFP_KERNEL);
 	if (!ring)
 		return NULL;
@@ -232,6 +231,13 @@ void fsm_dp_ring_cleanup(struct fsm_dp_ring *ring)
 		memset(ring, 0, sizeof(*ring));
 	}
 }
+
+void fsm_dp_ex_ring_cleanup(void *ring)
+{
+	fsm_dp_ring_cleanup((struct fsm_dp_ring *)ring);
+	kfree(ring);
+}
+EXPORT_SYMBOL(fsm_dp_ex_ring_cleanup);
 
 int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg)
 {
@@ -273,6 +279,7 @@ int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg)
 	}
 	return 0;
 }
+
 
 /* Read from ring */
 int fsm_dp_ring_read(
@@ -500,6 +507,13 @@ bool fsm_dp_ring_is_empty(struct fsm_dp_ring *ring)
 	return ret;
 }
 
+bool fsm_dp_ex_ring_is_empty(void *ring)
+{
+
+	return fsm_dp_ring_is_empty((struct fsm_dp_ring *)ring);
+}
+EXPORT_SYMBOL(fsm_dp_ex_ring_is_empty);
+
 static int fsm_dp_mem_init(
 	struct fsm_dp_mem *mem,
 	unsigned int bufcnt,
@@ -550,13 +564,13 @@ static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 	if (mem->loc.dma_mapped) {
 		size = mem->loc.size;
 		for (i = 0; i < mem->loc.num_cluster; i++) {
-			if (i ==  mem->loc.num_cluster - 1) {
+			if (i == mem->loc.num_cluster - 1)
 				dma_unmap_single(
 					pdrv->mhi.mhi_dev->mhi_cntrl->dev,
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
-			} else {
+			else {
 				dma_unmap_single(
 					pdrv->mhi.mhi_dev->mhi_cntrl->dev,
 					mem->loc.cluster_dma_addr[i],
@@ -866,13 +880,15 @@ done:
 void fsm_dp_mempool_free(struct fsm_dp_mempool *mempool)
 {
 	struct fsm_dp_drv *pdrv = NULL;
+	enum fsm_dp_mem_type mempool_type;
 
 	if (!mempool)
 		return;
 
 	pdrv = mempool->drv;
+	mempool_type = mempool->type;
 	fsm_dp_mempool_release_no_delay(mempool);
-	pdrv->mempool[mempool->type] = NULL;
+	pdrv->mempool[mempool_type] = NULL;
 	wmb();
 	return;
 }
@@ -1071,6 +1087,15 @@ struct fsm_dp_mempool *fsm_dp_find_mempool(
 
 		mempool = pdrv->mempool[mem_type];
 		if (mempool) {
+			if (mempool->signature != FSM_DP_MEMPOOL_SIG) {
+				FSM_DP_ERROR(
+					"%s: mempool %p signature 0x%x error, expect 0x%x\n",
+					__func__,
+					mempool,
+					mempool->signature,
+					FSM_DP_MEMPOOL_SIG);
+				continue;
+			}
 			mem = &mempool->mem;
 			remainder = mem->loc.size;
 			for (clust = 0; clust < mem->loc.num_cluster;

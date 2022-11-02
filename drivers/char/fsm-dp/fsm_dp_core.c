@@ -652,7 +652,10 @@ EXPORT_SYMBOL(fsm_dp_register_kernel_client);
 /*
  * fsm_dp_tx_skb
  *     Tx skb to device. skb its data is pointing to fsm dp packet payload.
- *     This function assumes skb is not nonlinear.
+ *
+ *     skb can have frag list. And each skb can be non-linear.
+ *     The leading skb should have enough head space to accommodate
+ *     fsm_dp_msghdr.
  */
 int fsm_dp_tx_skb(
 	void *handle,
@@ -664,12 +667,18 @@ int fsm_dp_tx_skb(
 	struct fsm_dp_msghdr *msghdr;
 	unsigned int plen;
 	int ret = 0;
+	struct sk_buff *iter;
 
-	if (!preg || !preg->pdrv || !skb || skb_is_nonlinear(skb))
+	if (!preg || !preg->pdrv || !skb)
 		return -EINVAL;
 	if (skb_headroom(skb) < sizeof(*msghdr))
 		return -ENOMEM;
+	if (!fsm_dp_mhi_is_ready(&preg->pdrv->mhi))
+		return -EIO;
 	plen = skb->len;
+	if (skb_has_frag_list(skb))
+		skb_walk_frags(skb, iter)
+			plen += iter->len;
 	skb_push(skb, sizeof(*msghdr));
 	msghdr = (struct fsm_dp_msghdr *)skb->data;
 	msghdr->type = preg->msg_type;
@@ -780,7 +789,7 @@ static int fsm_dp_core_init(struct fsm_dp_drv *pdrv)
 
 	mutex_init(&pdrv->mempool_lock);
 
-	of_dma_configure(dev, dev->of_node, true);
+	ret = of_dma_configure(dev, dev->of_node, false);
 
 	ret = fsm_dp_rx_init(pdrv);
 	if (ret)

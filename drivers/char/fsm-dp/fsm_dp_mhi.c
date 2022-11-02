@@ -160,10 +160,14 @@ static void __mhi_ul_skb_xfer_cmplt(struct sk_buff *skb)
 {
 	struct fsm_dp_msghdr *msghdr;
 	struct fsm_dp_kernel_register_db_entry *preg;
+	struct sk_buff *fskb;
 
 	msghdr = (struct fsm_dp_msghdr *)skb->data;
 	preg = fsm_dp_find_reg_db_type(msghdr->type);
 	if (!preg || !preg->tx_cmplt_cb) {
+		fskb = skb_shinfo(skb)->frag_list;
+		if (fskb)
+			kfree_skb_list(fskb);
 		kfree_skb(skb);
 		return;
 	}
@@ -193,7 +197,6 @@ static void __mhi_ul_xfer_cb(
 
 	mhi = mhi_device_get_devdata(mhi_dev);
 	drv = mhi->pdrv;
-
 	if (result->buf_indirect) {
 		__mhi_ul_skb_xfer_cmplt((struct sk_buff *) addr);
 		return;
@@ -212,12 +215,6 @@ static void __mhi_ul_xfer_cb(
 	if (unlikely(mempool == NULL)) {
 		FSM_DP_ERROR("%s: cannot find mempool, addr=%p\n",
 			  __func__, addr);
-		return;
-	}
-
-	if (mempool->signature != FSM_DP_MEMPOOL_SIG) {
-		FSM_DP_ERROR("%s: mempool %p signature 0x%x error, expect 0x%x\n",
-			  __func__, mempool, mempool->signature, FSM_DP_MEMPOOL_SIG);
 		return;
 	}
 
