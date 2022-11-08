@@ -50,8 +50,8 @@ static int fsm_tti_intr_cdev_open(
 	}
 	minor = iminor(inode);
 	if (minor >=  MAX_FSM_TTI_DEVICE) {
-		pr_err("device minor number %d should not be greater than 1\n",
-			minor);
+		pr_err("device minor number %d should not be greater than %d\n",
+			minor, MAX_FSM_TTI_DEVICE-1);
 		return -EINVAL;
 	}
 	tti_drv_cntx += minor;

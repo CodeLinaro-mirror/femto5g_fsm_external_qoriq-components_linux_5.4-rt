@@ -37,7 +37,7 @@
 #define FSM_TTI_PAGE_SIZE	PAGE_SIZE
 #define FSM_TTI_MAX_NAME_LEN	32
 
-#define MAX_FSM_TTI_DEVICE 2
+#define MAX_FSM_TTI_DEVICE 1
 
 /* Info for tti interrupt gpio platform */
 struct fsm_tti_gpio_platform_data {
