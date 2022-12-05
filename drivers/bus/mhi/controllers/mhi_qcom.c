@@ -27,6 +27,9 @@
 #include <linux/mhi.h>
 #include "mhi_qcom.h"
 
+/* boot log markings */
+#define BL_PREFIX "BL: "
+
 struct arch_info {
 	struct mhi_dev *mhi_dev;
 	struct pci_saved_state *pcie_saved_state;
@@ -39,7 +42,6 @@ struct firmware_info {
 };
 
 static const struct firmware_info firmware_table[] = {
-	{.dev_id = 0x305, .fw_image = "fsm/sbl1.mbn"},
 	{.dev_id = 0x308, .fw_image = "fsm/xbl.elf"},
 	/* default, set to debug.mbn */
 	{.fw_image = "debug.mbn", .edl_image = "debug.mbn"},
@@ -82,6 +84,51 @@ int mhi_debugfs_trigger_m3(void *data, u64 val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(debugfs_trigger_m3_fops, NULL,
 			mhi_debugfs_trigger_m3, "%llu\n");
+
+static int mhi_bl_probe(struct mhi_device *mhi_device,
+                        const struct mhi_device_id *id)
+{
+	MHI_CNTRL_LOG("Probing Successful\n");
+	return 0;
+}
+
+static void mhi_bl_remove(struct mhi_device *mhi_device)
+{
+}
+
+static void mhi_bl_dl_cb(struct mhi_device *mhi_device,
+                        struct mhi_result *mhi_result)
+{
+	struct mhi_controller *mhi_cntrl = mhi_device->mhi_cntrl;
+	char *buf = mhi_result->buf_addr;
+
+	/* force a null at last character */
+	buf[mhi_result->bytes_xferd - 1] = '\0';
+	if(mhi_result->bytes_xferd)
+		MHI_CNTRL_LOG("%s %s\n", BL_PREFIX, buf);
+}
+
+static void mhi_bl_dummy_cb(struct mhi_device *mhi_dev,
+                            struct mhi_result *mhi_result)
+{
+}
+
+static const struct mhi_device_id mhi_bl_match_table[] = {
+	{ .chan = "BL" },
+	{},
+};
+
+static struct mhi_driver mhi_bl_driver = {
+	.id_table = mhi_bl_match_table,
+	.remove = mhi_bl_remove,
+	.probe = mhi_bl_probe,
+	.ul_xfer_cb = mhi_bl_dummy_cb,
+	.dl_xfer_cb = mhi_bl_dl_cb,
+	.driver = {
+		.name = "MHI_BL",
+		.owner = THIS_MODULE,
+	},
+};
 
 int mhi_arch_link_suspend(struct mhi_controller *mhi_cntrl)
 {
@@ -912,6 +959,7 @@ static int mhi_arch_pcie_init(struct mhi_controller *mhi_cntrl)
 		mhi_dev->arch_info = arch_info;
 		arch_info->mhi_dev = mhi_dev;
 	}
+	mhi_driver_register(&mhi_bl_driver);
 
 	return ret;
 }
@@ -990,6 +1038,7 @@ void mhi_pci_remove(struct pci_dev *pci_dev)
 		return;
 
 	mhi_power_down(mhi_cntrl, true);
+	mhi_driver_unregister(&mhi_bl_driver);
 	mhi_deinit_pci_dev(mhi_cntrl);
 	mhi_arch_iommu_deinit(mhi_cntrl);
 	mhi_arch_pcie_deinit(mhi_cntrl);

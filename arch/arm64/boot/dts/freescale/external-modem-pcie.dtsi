@@ -277,7 +277,6 @@
 				mhi,ee = <0x2>;
 				mhi,auto-queue;
 				mhi,auto-start;
-				status = "disabled";
 			};
 
 			mhi_chan@26 {
@@ -748,7 +747,6 @@
 				mhi,ee = <0x2>;
 				mhi,auto-queue;
 				mhi,auto-start;
-				status = "disabled";
 			};
 
 			mhi_chan@26 {
