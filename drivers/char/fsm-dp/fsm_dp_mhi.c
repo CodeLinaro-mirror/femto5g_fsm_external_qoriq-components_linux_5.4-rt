@@ -440,7 +440,23 @@ int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv)
 
 void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv)
 {
+	struct mhi_device *mhi_dev;
+
 	if (__pdrv) {
+		FSM_DP_INFO("FSM-DP: fsm_dp_mhi_cleanup\n");
+		mhi_dev = pdrv->mhi.mhi_dev;
+		if (mhi_dev) {
+			FSM_DP_INFO("FSM-DP: unprepare %s\n",
+				mhi_dev->chan_name);
+			mhi_unprepare_from_transfer(mhi_dev);
+		}
+		mhi_dev = pdrv->mhi_llc.mhi_dev;
+		if (mhi_dev) {
+
+			FSM_DP_INFO("FSM-DP: unprepare %s\n",
+				mhi_dev->chan_name);
+			mhi_unprepare_from_transfer(mhi_dev);
+		}
 		mhi_driver_unregister(&__fsm_dp_mhi_drv);
 		__pdrv = NULL;
 		pr_info("FSM-DP: Unregister MHI driver\n");
