@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -245,12 +245,11 @@ static void __mhi_ul_xfer_cb(
 					FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP;
 			p->xmit_status = FSM_DP_XMIT_OK;
 #endif
-			if (mempool->pf_enable) {
-				fsm_dp_set_buf_ts((unsigned char *)p +
+			fsm_dp_set_buf_ts(mempool, (unsigned char *)p +
 					sizeof(struct fsm_dp_buf_cntrl),
 					FSM_DP_DL_SEND_DMA_COMP_INDEX);
-				fsm_dp_save_dl_pkt_ts(mempool, p);
-			}
+			if (mempool->pf_enable)
+				fsm_dp_register_dl_traffic(mempool, p);
 
 			wmb(); /* make it visible to other CPU */
 		}
@@ -286,8 +285,7 @@ static void __mhi_dl_xfer_cb(
 		fsm_dp_mempool_put_buf(mempool, result->buf_addr);
 	} else {
 		mhi->stats.rx_cnt++;
-		if (mempool->pf_enable)
-			fsm_dp_set_buf_ts(result->buf_addr,
+		fsm_dp_set_buf_ts(mempool, result->buf_addr,
 				FSM_DP_UL_DMA_COMP_INDEX);
 		fsm_dp_rx(drv, result->buf_addr, result->bytes_xferd, mhi->llc);
 	}

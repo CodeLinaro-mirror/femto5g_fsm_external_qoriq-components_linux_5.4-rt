@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -624,139 +624,163 @@ static unsigned long calc_ts_diff_us(struct timespec *end, struct timespec *star
 {
 	unsigned long diff = 0;
 
-	diff = (end->tv_sec - start->tv_sec) * 0x1000000000;
-	diff = diff + end->tv_nsec - start->tv_nsec;
+	diff = (end->tv_sec - start->tv_sec) * 1000000000;
+	diff = (diff + end->tv_nsec) - start->tv_nsec;
 	return diff / 1000;
+}
+
+void fsm_dp_register_dl_traffic(struct fsm_dp_mempool *mempool,
+					struct fsm_dp_buf_cntrl *pf)
+{
+	unsigned long diff;
+	unsigned int cur;
+	unsigned int prev;
+
+	if (mempool->pf_enable < 1)
+		return;
+	if (!pf->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX].tv_sec ||
+		!pf->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX].tv_sec)
+		return;
+	mempool->dl_traffic_profiling.frame_count++;
+	memcpy(&mempool->dl_traffic_profiling.
+		entry[mempool->dl_traffic_profiling.next], &pf->ts[0],
+		sizeof(struct traffic_profiling_entry));
+	cur = mempool->dl_traffic_profiling.next;
+	mempool->dl_traffic_profiling.next++;
+	if (mempool->dl_traffic_profiling.next  >= NUM_DL_PROFILING) {
+		mempool->dl_traffic_profiling.wrap = true;
+		mempool->dl_traffic_profiling.next = 0;
+	}
+
+	diff = calc_ts_diff_us(
+		&mempool->dl_traffic_profiling.entry[cur]
+				.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX],
+		&mempool->dl_traffic_profiling.entry[cur]
+				.ts[FSM_DP_DL_APPL_SEND_REQ_INDEX]);
+	if (diff > mempool->dl_traffic_profiling.max_dma_req)
+		mempool->dl_traffic_profiling.max_dma_req = diff;
+	if (diff < mempool->dl_traffic_profiling.min_dma_req)
+		mempool->dl_traffic_profiling.min_dma_req = diff;
+	mempool->dl_traffic_profiling.avg_dma_req += diff;
+
+	diff = calc_ts_diff_us(
+		&mempool->dl_traffic_profiling.entry[cur]
+				.ts[FSM_DP_DL_SEND_DMA_COMP_INDEX],
+		&mempool->dl_traffic_profiling.entry[cur]
+				.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX]);
+	if (diff > mempool->dl_traffic_profiling.max_dma_cmp)
+		mempool->dl_traffic_profiling.max_dma_cmp = diff;
+	if (diff < mempool->dl_traffic_profiling.min_dma_cmp)
+		mempool->dl_traffic_profiling.min_dma_cmp = diff;
+	mempool->dl_traffic_profiling.avg_dma_cmp += diff;
+
+	if (mempool->dl_traffic_profiling.frame_count == 1)
+		return;
+	if (cur == 0)
+		prev = NUM_DL_PROFILING - 1;
+	else
+		prev = cur - 1;
+
+	diff = calc_ts_diff_us(
+		&mempool->dl_traffic_profiling.
+			entry[cur].ts[FSM_DP_DL_APPL_SEND_REQ_INDEX],
+		&mempool->dl_traffic_profiling.
+			entry[prev].ts[FSM_DP_DL_APPL_SEND_REQ_INDEX]);
+	if (diff > mempool->dl_traffic_profiling.max_frame_gap)
+		mempool->dl_traffic_profiling.max_frame_gap = diff;
+	if (diff < mempool->dl_traffic_profiling.min_frame_gap)
+		mempool->dl_traffic_profiling.min_frame_gap = diff;
+	mempool->dl_traffic_profiling.avg_frame_gap += diff;
 }
 
 static int debugfs_mempool_DL_traffic_pf_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_mempool *mempool =
 		*((struct fsm_dp_mempool **)s->private);
-	int count, count1;
-	unsigned int start, iter;
-	struct timespec prev;
+	unsigned int start, iter, count = 0;
 	unsigned long diff;
-	unsigned long max_dma_req = 0, max_dma_cmp = 0, max_frame_gap = 0;
-	unsigned long min_dma_req = 0xffffffff, min_dma_cmp = 0xffffffff,
-			min_frame_gap = 0xffffffff;
-	unsigned long avg_dma_req = 0, avg_dma_cmp = 0, avg_frame_gap = 0;
 
-	if (mempool) {
-		if (!mempool->dl_traffic_profiling.wrap) {
-			start = 0;
-			if (mempool->dl_traffic_profiling.next == 0)
-				return 0;
-		} else
-			start = mempool->dl_traffic_profiling.next;
+	if (!mempool || mempool->pf_enable < 1 ||
+			!mempool->dl_traffic_profiling.frame_count)
+		return 0;
 
-		for (count = 0, iter  = start; ; count++) {
-			diff = calc_ts_diff_us(
-				&mempool->dl_traffic_profiling.entry[iter]
-					.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX],
-				&mempool->dl_traffic_profiling.entry[iter]
-					.ts[FSM_DP_DL_APPL_SEND_REQ_INDEX]);
-			if (diff > max_dma_req)
-				max_dma_req = diff;
-			if (diff < min_dma_req)
-				min_dma_req = diff;
-			avg_dma_req += diff;
-
-			diff = calc_ts_diff_us(
-				&mempool->dl_traffic_profiling.entry[iter]
-					.ts[FSM_DP_DL_SEND_DMA_COMP_INDEX],
-				&mempool->dl_traffic_profiling.entry[iter]
-					.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX]);
-			if (diff > max_dma_cmp)
-				max_dma_cmp = diff;
-			if (diff < min_dma_cmp)
-				min_dma_cmp = diff;
-			avg_dma_cmp += diff;
-
-			if (count) {
-				diff = calc_ts_diff_us(
-					&mempool->dl_traffic_profiling.
-						entry[iter].ts
-						[FSM_DP_DL_APPL_SEND_REQ_INDEX],
-					&prev);
-				if (diff > max_frame_gap)
-					max_frame_gap = diff;
-				if (diff < min_frame_gap)
-					min_frame_gap = diff;
-				avg_frame_gap += diff;
-			}
-			prev = mempool->dl_traffic_profiling.
-				entry[iter].ts[FSM_DP_DL_APPL_SEND_REQ_INDEX];
-			iter++;
-			if (iter == NUM_DL_PROFILING)
-				iter = 0;
-			if (iter == mempool->dl_traffic_profiling.next)
-				break;
-		}
-		seq_printf(s, "Max transfer request time %ld us,"
-				" Min transfer request time %ld us, ",
-				max_dma_req, min_dma_req);
-		if (count)
-			seq_printf(s, " Avergage transfer request time %ld.%-3ld us\n",
-				avg_dma_req / count,
-				(avg_dma_req % count) * 100 / count);
-		else
-			seq_printf(s, "\n");
-
-		seq_printf(s, "Max transfer Complete time %ld us,"
-				" Min transfer Complete time %ld us,",
-				max_dma_cmp, min_dma_cmp);
-		if (count)
-			seq_printf(s, " Avergage transfer request time %ld.%-3ld us\n",
-				avg_dma_cmp / count,
-				(avg_dma_cmp % count) * 100 / count);
-		else
-			seq_printf(s, "\n");
-
+	seq_printf(s, "Max transfer request time %ld us,"
+		" Min transfer request time %ld us, ",
+		mempool->dl_traffic_profiling.max_dma_req,
+		mempool->dl_traffic_profiling.min_dma_req);
+	seq_printf(s, " Avergage transfer request time %ld.%-3ld us\n",
+		 mempool->dl_traffic_profiling.avg_dma_req /
+			mempool->dl_traffic_profiling.frame_count,
+		(mempool->dl_traffic_profiling.avg_dma_req %
+			mempool->dl_traffic_profiling.frame_count) * 100 /
+			mempool->dl_traffic_profiling.frame_count);
+	seq_printf(s, "Max transfer complete time %ld us,"
+		" Min transfer complete time %ld us,",
+		mempool->dl_traffic_profiling.max_dma_cmp,
+		mempool->dl_traffic_profiling.min_dma_cmp);
+	seq_printf(s, " Avergage transfer complete time %ld.%-3ld us\n",
+		mempool->dl_traffic_profiling.avg_dma_cmp /
+			mempool->dl_traffic_profiling.frame_count,
+		(mempool->dl_traffic_profiling.avg_dma_cmp %
+			mempool->dl_traffic_profiling.frame_count) * 100 /
+			mempool->dl_traffic_profiling.frame_count);
+	if (mempool->dl_traffic_profiling.frame_count > 1) {
 		seq_printf(s, "Max inter frame gap time %ld us,"
-				" Min inter frame gap time %ld us, ",
-				max_frame_gap, min_frame_gap);
-		if (count)
-			seq_printf(s, " Avergage transfer request time %ld.%-3ld us\n",
-				avg_frame_gap / count,
-				(avg_frame_gap % count) * 100 / count);
+			" Min inter frame gap time %ld us, ",
+			mempool->dl_traffic_profiling.max_frame_gap,
+			mempool->dl_traffic_profiling.min_frame_gap);
+		seq_printf(s,
+			" Avergage inter frame gap time %ld.%-3ld us\n",
+			mempool->dl_traffic_profiling.avg_frame_gap /
+				mempool->dl_traffic_profiling.frame_count - 1,
+			(mempool->dl_traffic_profiling.avg_frame_gap %
+				mempool->dl_traffic_profiling.frame_count - 1)
+					* 100 /
+				mempool->dl_traffic_profiling.frame_count - 1);
+	}
+	if (mempool->pf_enable ==  1)
+		return 0;
+	if (!mempool->dl_traffic_profiling.wrap)
+		start = 0;
+	else
+		start = mempool->dl_traffic_profiling.next;
+	for (iter  = start;;) {
+		struct traffic_profiling_entry *p;
+		struct timespec prev;
+		struct  timespec *pp = NULL;
+
+		p = &mempool->dl_traffic_profiling.entry[iter];
+		if (pp)
+			diff = calc_ts_diff_us(
+					&p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX],
+					pp);
+		seq_printf(s,	"Req %dth entry: "
+				"Apps Transfer Req time %ld.%ld,"
+				"Kernel Transfer Req time %ld.%ld,"
+				"Transfer Cmp time %ld.%ld, ", count,
+			p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX].tv_sec,
+			p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX].tv_nsec,
+			p->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX].tv_sec,
+			p->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX].tv_nsec,
+			p->ts[FSM_DP_DL_SEND_DMA_COMP_INDEX].tv_sec,
+			p->ts[FSM_DP_DL_SEND_DMA_COMP_INDEX].tv_nsec);
+		if (pp)
+			seq_printf(s, "Inter Frame Gap %ldus\n", diff);
 		else
 			seq_printf(s, "\n");
-		if (mempool->pf_enable <= 1)
-			goto ret;
-		for (iter  = start, count1 = 0; count1 < count; count1++, iter++) {
-			struct traffic_profiling_entry *p;
-
-			p = &mempool->dl_traffic_profiling.entry[iter];
-			if (count1)
-				diff = calc_ts_diff_us(
-					&p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX],
-					&prev);
-			seq_printf(s,	"Req %dth entry: "
-					"Apps Transfer Req time %ld.%ld,"
-					"Kernel Transfer Req time %ld.%ld,"
-					"Transfer Cmp time %ld.%ld, ",
-					count,
-				p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX].tv_sec,
-					p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX]
-						.tv_nsec,
-				p->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX].tv_sec,
-					p->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX]
-						.tv_nsec,
-				p->ts[FSM_DP_DL_SEND_DMA_COMP_INDEX].tv_sec,
-					p->ts[FSM_DP_DL_SEND_DMA_COMP_INDEX]
-						.tv_nsec);
-			if (count1)
-				seq_printf(s, "Inter Frame Gap %ldus\n", diff);
-			else
-				seq_printf(s, "\n");
-			prev = mempool->dl_traffic_profiling.entry[iter]
+		prev = mempool->dl_traffic_profiling.entry[iter]
 				.ts[FSM_DP_DL_APPL_SEND_REQ_INDEX];
-			if (iter == NUM_DL_PROFILING)
-				iter = 0;
-		}
+		pp = &prev;
+		iter++;
+		if (!mempool->dl_traffic_profiling.wrap) {
+			if (iter == mempool->dl_traffic_profiling.frame_count)
+				break;
+		} else if (iter == NUM_DL_PROFILING)
+			iter = 0;
+		count++;
+		if (iter == start)
+			break;
 	}
-ret:
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_mempool_DL_traffic_pf,
@@ -789,6 +813,7 @@ static ssize_t debugfs_mempool_traffic_pf_enable_write(
 	if (kstrtouint_from_user(buf, count, 0, &value))
 		return -EFAULT;
 	mempool->pf_enable = value;
+	mempool_traffic_pf_reset(mempool);
 	return count;
 }
 

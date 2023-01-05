@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -659,6 +659,22 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 	}
 }
 
+void mempool_traffic_pf_reset(struct fsm_dp_mempool *mempool)
+{
+	mempool->dl_traffic_profiling.max_dma_req = 0;
+	mempool->dl_traffic_profiling.max_dma_cmp = 0;
+	mempool->dl_traffic_profiling.max_frame_gap = 0;
+	mempool->dl_traffic_profiling.min_dma_req = 0xffffffff;
+	mempool->dl_traffic_profiling.min_dma_cmp = 0xffffffff;
+	mempool->dl_traffic_profiling.min_frame_gap = 0xffffffff;
+	mempool->dl_traffic_profiling.avg_dma_req = 0;
+	mempool->dl_traffic_profiling.avg_dma_cmp = 0;
+	mempool->dl_traffic_profiling.avg_frame_gap = 0;
+	mempool->dl_traffic_profiling.frame_count = 0;
+	mempool->dl_traffic_profiling.next = 0;
+	mempool->dl_traffic_profiling.wrap = false;
+}
+
 static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 	struct fsm_dp_drv *pdrv,
 	enum fsm_dp_mem_type type,
@@ -679,9 +695,7 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 	mempool->drv = pdrv;
 	mempool->type = type;
 	mempool->signature = FSM_DP_MEMPOOL_SIG;
-	mempool->dl_traffic_profiling.wrap = false;
-	mempool->dl_traffic_profiling.next = 0;
-	mempool->pf_enable = 0;
+	mempool_traffic_pf_reset(mempool);
 
 	/*
 	 * allocate dummy buffer for out of buffer condition

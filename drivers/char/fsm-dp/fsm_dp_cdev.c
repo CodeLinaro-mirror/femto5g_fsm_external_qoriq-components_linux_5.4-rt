@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -157,8 +157,7 @@ static int __cdev_tx(
 			iov_off_array[n] = b_backtrack;
 			p = (struct fsm_dp_buf_cntrl *)
 				(iov[n].iov_base - b_backtrack);
-			if (mempool->pf_enable)
-				fsm_dp_set_buf_ts(
+			fsm_dp_set_buf_ts(mempool,
 					(unsigned char *)p +
 					sizeof(struct fsm_dp_buf_cntrl),
 					FSM_DP_DL_KERNEL_SEND_REQ_INDEX);

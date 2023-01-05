@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -111,6 +111,16 @@ struct fsm_dp_mempool_traffic_profiling {
 	bool wrap;
 	unsigned int next;
 	struct traffic_profiling_entry entry[NUM_DL_PROFILING];
+	unsigned long max_dma_req;
+	unsigned long max_dma_cmp;
+	unsigned long max_frame_gap;
+	unsigned long min_dma_req;
+	unsigned long min_dma_cmp;
+	unsigned long min_frame_gap;
+	unsigned long avg_dma_req;
+	unsigned long avg_dma_cmp;
+	unsigned long avg_frame_gap;
+	unsigned long frame_count;
 };
 
 struct fsm_dp_mempool {
@@ -289,11 +299,15 @@ static inline void fsm_dp_set_buf_state(void *ptr, enum fsm_dp_buf_state state)
 }
 
 /* set buffer state, ptr: pointing to beginging of buffer user data */
-static inline void fsm_dp_set_buf_ts(void *ptr, int index)
+static inline void fsm_dp_set_buf_ts(struct fsm_dp_mempool *mempool,
+			void *ptr, int index)
 {
 	struct fsm_dp_buf_cntrl *pf = (ptr - FSM_DP_MSG_CNTL_BLK);
 
-	ktime_get_ts(&pf->ts[index]);
+	if (mempool->pf_enable)
+		ktime_get_ts(&pf->ts[index]);
+	else
+		memset(&pf->ts[0], 0, sizeof(struct timespec));
 }
 
 /* get true buffer size which includes size for user space and control  */
@@ -358,18 +372,9 @@ static inline unsigned long fsm_dp_get_mem_offset(void *addr,
 	return offset;
 }
 
-static inline void fsm_dp_save_dl_pkt_ts(struct fsm_dp_mempool *mempool,
-	struct fsm_dp_buf_cntrl *pf)
-{
+void fsm_dp_register_dl_traffic(struct fsm_dp_mempool *mempool,
+	struct fsm_dp_buf_cntrl *pf);
 
-	memcpy(&mempool->dl_traffic_profiling.
-		entry[mempool->dl_traffic_profiling.next], &pf->ts[0],
-		sizeof(struct traffic_profiling_entry));
-	mempool->dl_traffic_profiling.next++;
-	if (mempool->dl_traffic_profiling.next  >= NUM_DL_PROFILING) {
-		mempool->dl_traffic_profiling.wrap = true;
-		mempool->dl_traffic_profiling.next = 0;
-	}
-}
+void mempool_traffic_pf_reset(struct fsm_dp_mempool *mempool);
 
 #endif /* __FSM_DP_MEM_H__ */
