@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -429,11 +429,11 @@ int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv)
 		ret = mhi_driver_register(&__fsm_dp_mhi_drv);
 		if (ret) {
 			__pdrv = NULL;
-			pr_err("FSM-DP: mhi registration failed!\n");
+			FSM_DP_ERROR("FSM-DP: mhi registration failed!\n");
 			return ret;
 		}
 
-		pr_info("FSM-DP: Register MHI driver!\n");
+		FSM_DP_INFO("FSM-DP: Register MHI driver!\n");
 	}
 	return ret;
 }
@@ -459,6 +459,6 @@ void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv)
 		}
 		mhi_driver_unregister(&__fsm_dp_mhi_drv);
 		__pdrv = NULL;
-		pr_info("FSM-DP: Unregister MHI driver\n");
+		FSM_DP_INFO("FSM-DP: Unregister MHI driver\n");
 	}
 }

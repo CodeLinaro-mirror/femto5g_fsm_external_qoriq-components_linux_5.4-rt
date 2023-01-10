@@ -1,6 +1,6 @@
 /* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,15 +23,27 @@
 #include <linux/platform_device.h>
 
 #include <linux/fsm_tti_intr_if.h>
+#include <linux/fsm_ipc_logging.h>
+
 
 #define FSM_TTI_MODULE_NAME	"fsm-tti"
 #define FSM_TTI_DEV_CLASS_NAME	FSM_TTI_MODULE_NAME
 #define FSM_TTI_CDEV_NAME	FSM_TTI_MODULE_NAME
 
-#define FSM_TTI_DEBUG	pr_debug
-#define FSM_TTI_INFO	pr_info
-#define FSM_TTI_ERROR	pr_err
-#define FSM_TTI_WARN	pr_warn
+/* ipc logging */
+extern void *fsm_tti_ipc_log;
+
+#define FSM_TTI_DEBUG(__msg, ...) \
+	FSM_IPC_LOG_DEBUG(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_TTI_INFO(__msg, ...) \
+	FSM_IPC_LOG_INFO(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_TTI_ERROR(__msg, ...) \
+	FSM_IPC_LOG_ERROR(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_TTI_WARN(__msg, ...) \
+	FSM_IPC_LOG_WARN(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
 
 #define FSM_TTI_GPIO_NAME	"tti-gpio"
 #define FSM_TTI_PAGE_SIZE	PAGE_SIZE

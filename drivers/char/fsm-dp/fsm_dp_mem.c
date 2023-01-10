@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1138,7 +1138,7 @@ bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv)
 		if (*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail !=
 			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head) {
 
-			pr_warn("%s prod head %d prod tail %d\n", __func__,
+			FSM_DP_WARN("%s prod head %d prod tail %d\n", __func__,
 				*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head,
 				*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail);
 			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail =

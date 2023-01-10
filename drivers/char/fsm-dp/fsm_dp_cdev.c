@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -956,7 +956,7 @@ int fsm_dp_cdev_init(struct fsm_dp_drv *pdrv)
 	mutex_init(&pdrv->cdev_lock);
 	INIT_LIST_HEAD(&pdrv->cdev_head);
 
-	pr_info("FSM-DP: cdev initialized. __cdev_tx at 0x%p\n", __cdev_tx);
+	FSM_DP_INFO("FSM-DP: cdev initialized. __cdev_tx at 0x%p\n", __cdev_tx);
 	return 0;
 
 del_cdev:
@@ -966,7 +966,7 @@ unregister_cdev:
 cleanup_class:
 	class_destroy(pdrv->dev_class);
 	pdrv->dev_class = NULL;
-	pr_err("FSM-DP: failed to initialize cdev\n");
+	FSM_DP_ERROR("FSM-DP: failed to initialize cdev\n");
 	return ret;
 }
 

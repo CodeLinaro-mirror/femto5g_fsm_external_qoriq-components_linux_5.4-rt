@@ -1,6 +1,6 @@
 /* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,6 +21,9 @@
 #include <linux/interrupt.h>
 
 #include "fsm_tti_intr.h"
+
+/* ipc logging */
+void *fsm_tti_ipc_log = NULL;
 
 static irqreturn_t fsm_tti_gpio_irq_handler(int irq, void *irq_data)
 {
@@ -85,6 +88,9 @@ static int __init fsm_tti_intr_probe(struct platform_device *pdev)
 	struct fsm_tti_mmap_info *sdata;
 	char gpio_label[256];
 	int i;
+
+	fsm_enable_ipc_logging(&fsm_tti_ipc_log,
+		FSM_DEFAULT_IPC_LOG_PAGES, FSM_TTI_MODULE_NAME);
 
 	FSM_TTI_INFO("FSM-TTI: probing device\n");
 
@@ -247,6 +253,7 @@ static int __exit fsm_tti_intr_remove(struct platform_device *pdev)
 		kfree(tti_intr_drv);
 	}
 	FSM_TTI_INFO("FSM-TTI: module removed\n");
+	fsm_disable_ipc_logging(&fsm_tti_ipc_log);
 	return 0;
 }
 
