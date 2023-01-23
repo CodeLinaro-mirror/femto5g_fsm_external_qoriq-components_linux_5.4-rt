@@ -20,6 +20,9 @@
 #include <linux/skbuff.h>
 #include "fsm_dp.h"
 
+/* ipc logging */
+void *fsm_dp_ipc_log = NULL;
+
 #define DEFAULT_LOOPBACK_JOB_NUM 8192
 #define FSM_DP_NAPI_WEIGHT 64
 static struct fsm_dp_drv *fsm_dp_pdrv;
@@ -820,7 +823,7 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 	rx_work = mhi_poll(mhi->mhi_dev, budget);
 	if (rx_work < 0) {
 		rx_work = 0;
-		pr_err("Error polling ret:%d\n", rx_work);
+		FSM_DP_ERROR("Error polling ret:%d\n", rx_work);
 		napi_complete(napi);
 		goto exit_poll;
 	}
@@ -862,7 +865,9 @@ static int fsm_dp_probe(struct platform_device *pdev)
 	struct fsm_dp_drv *pdrv, *p;
 	int ret;
 
-	pr_info("FSM-DP: probing FSM\n");
+	fsm_enable_ipc_logging(&fsm_dp_ipc_log,
+		FSM_DEFAULT_IPC_LOG_PAGES, FSM_DP_MODULE_NAME);
+	FSM_DP_INFO("FSM-DP: probing FSM\n");
 
 	pdrv = kzalloc(sizeof(*pdrv), GFP_KERNEL);
 	if (IS_ERR(pdrv))
@@ -904,7 +909,7 @@ static int fsm_dp_probe(struct platform_device *pdev)
 	napi_enable(&p->mhi_llc.napi);
 	INIT_WORK(&p->mhi_llc.alloc_work, fsm_dp_alloc_work);
 
-	pr_info("FSM-DP: module initialized now\n");
+	FSM_DP_INFO("FSM-DP: module initialized now\n");
 	return 0;
 
 cleanup_cdev:
@@ -914,7 +919,7 @@ cleanup_mhi:
 cleanup:
 	fsm_dp_core_cleanup(pdrv);
 	fsm_dp_pdrv = NULL;
-	pr_err("FSM-DP: module init failed!\n");
+	FSM_DP_ERROR("FSM-DP: module init failed!\n");
 	return ret;
 }
 
@@ -935,7 +940,7 @@ static int fsm_dp_remove(struct platform_device *pdev)
 		fsm_dp_core_cleanup(pdrv);
 	}
 	fsm_dp_pdrv = NULL;
-
+	fsm_disable_ipc_logging(&fsm_dp_ipc_log);
 	return 0;
 }
 

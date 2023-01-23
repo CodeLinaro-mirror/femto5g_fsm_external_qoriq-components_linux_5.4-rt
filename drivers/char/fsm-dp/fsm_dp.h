@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,6 +27,7 @@
 #include <linux/atomic.h>
 #include <linux/workqueue.h>
 #include <linux/fsm_dp_ioctl.h>
+#include <linux/fsm_ipc_logging.h>
 
 #include "fsm_dp_mhi.h"
 #include "fsm_dp_mem.h"
@@ -35,10 +36,20 @@
 #define FSM_DP_DEV_CLASS_NAME	FSM_DP_MODULE_NAME
 #define FSM_DP_CDEV_NAME	FSM_DP_MODULE_NAME
 
-#define FSM_DP_DEBUG	pr_debug
-#define FSM_DP_INFO	pr_info
-#define FSM_DP_ERROR	pr_err
-#define FSM_DP_WARN	pr_warn
+/* ipc logging */
+extern void *fsm_dp_ipc_log;
+
+#define FSM_DP_DEBUG(__msg, ...) \
+	FSM_IPC_LOG_DEBUG(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_DP_INFO(__msg, ...) \
+	FSM_IPC_LOG_INFO(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_DP_ERROR(__msg, ...) \
+	FSM_IPC_LOG_ERROR(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_DP_WARN(__msg, ...) \
+	FSM_IPC_LOG_WARN(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
 
 struct vm_area_struct;
 

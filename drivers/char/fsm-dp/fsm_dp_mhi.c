@@ -427,11 +427,11 @@ int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv)
 		ret = mhi_driver_register(&__fsm_dp_mhi_drv);
 		if (ret) {
 			__pdrv = NULL;
-			pr_err("FSM-DP: mhi registration failed!\n");
+			FSM_DP_ERROR("FSM-DP: mhi registration failed!\n");
 			return ret;
 		}
 
-		pr_info("FSM-DP: Register MHI driver!\n");
+		FSM_DP_INFO("FSM-DP: Register MHI driver!\n");
 	}
 	return ret;
 }
@@ -457,6 +457,6 @@ void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv)
 		}
 		mhi_driver_unregister(&__fsm_dp_mhi_drv);
 		__pdrv = NULL;
-		pr_info("FSM-DP: Unregister MHI driver\n");
+		FSM_DP_INFO("FSM-DP: Unregister MHI driver\n");
 	}
 }

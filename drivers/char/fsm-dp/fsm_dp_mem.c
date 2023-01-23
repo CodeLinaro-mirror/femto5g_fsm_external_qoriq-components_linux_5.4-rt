@@ -1152,7 +1152,7 @@ bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv)
 		if (*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail !=
 			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head) {
 
-			pr_warn("%s prod head %d prod tail %d\n", __func__,
+			FSM_DP_WARN("%s prod head %d prod tail %d\n", __func__,
 				*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head,
 				*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail);
 			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail =

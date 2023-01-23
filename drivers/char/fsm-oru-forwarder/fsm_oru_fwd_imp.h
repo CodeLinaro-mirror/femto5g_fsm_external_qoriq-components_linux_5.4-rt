@@ -1,5 +1,7 @@
 /* Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,7 +26,7 @@
 #include <linux/hrtimer.h>
 #include <linux/fsm_dp_ioctl.h>
 #include <linux/fsm_oru_fwd.h>
-
+#include <linux/fsm_ipc_logging.h>
 #define FSM_ORU_FWD_NAME             "fsm-oru-forwarder"
 #define ECPRI_ETHER_TYPE 0xAEFE /* eCPRI ether type */
 
@@ -40,8 +42,20 @@
 #define FSM_ORU_MAX_ECPRI_PDU_SIZE (FSM_DP_MAX_DL_MSG_LEN - \
 					sizeof(struct fsm_dp_msghdr))
 
+/* ipc logging */
+extern void *fsm_oru_fwd_ipc_log;
 
+#define FSM_ORU_FWD_DEBUG(__msg, ...) \
+	FSM_IPC_LOG_DEBUG(fsm_oru_fwd_ipc_log, __msg, ##__VA_ARGS__)
 
+#define FSM_ORU_FWD_INFO(__msg, ...)  \
+	FSM_IPC_LOG_INFO(fsm_oru_fwd_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_ORU_FWD_ERROR(__msg, ...)  \
+	FSM_IPC_LOG_ERROR(fsm_oru_fwd_ipc_log, __msg, ##__VA_ARGS__)
+
+#define FSM_ORU_FWD_WARN(__msg, ...)  \
+	FSM_IPC_LOG_WARN(fsm_oru_fwd_ipc_log, __msg, ##__VA_ARGS__)
 
 struct ofwd_netdev_priv {
 	bool enabled;
