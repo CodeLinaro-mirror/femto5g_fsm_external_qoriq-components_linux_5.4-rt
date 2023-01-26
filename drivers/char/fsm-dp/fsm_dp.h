@@ -91,6 +91,8 @@ struct vm_area_struct;
 		panic(msg); \
 } while (0)
 
+#define FSM_DP_POLL_WAKEUP_MAX 8
+
 /*
  * vma mapping for mempool which includes
  * - buffer memory region
@@ -205,7 +207,8 @@ struct fsm_dp_drv {
 	struct work_struct alloc_work;
 	unsigned int fsm_dp_outbuf_drop_sync;
 	fsm_dp_ring_index_t fsm_dp_prev_ul_prod_tail;
-
+	struct fsm_dp_rxqueue *napipoll_rxq;
+	unsigned int napipoll_cnt;
 #ifdef CONFIG_FSM_DP_TEST
 	struct fsm_dp_test_ring test_ring;
 #endif

@@ -432,7 +432,7 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
 		bool llc)
 {
 	struct fsm_dp_mempool *mempool;
-	struct fsm_dp_rxqueue *rxq;
+	struct fsm_dp_rxqueue *rxq = NULL;
 	struct fsm_dp_msghdr *msghdr;
 	unsigned int offset;
 	unsigned int cl;
@@ -440,6 +440,10 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
 
 	if (unlikely(pdrv == NULL || addr == NULL || !length)) {
 		FSM_DP_ERROR("%s: invalid argument\n", __func__);
+		if (pdrv->napipoll_rxq)
+			wake_up(&pdrv->napipoll_rxq->wq);
+		pdrv->napipoll_rxq = NULL;
+		pdrv->napipoll_cnt = 0;
 		return;
 	}
 
@@ -447,6 +451,10 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
 	if (mempool == NULL) {
 		FSM_DP_ERROR("%s: not UL address, addr=%p\n",
 			  __func__, addr);
+		if (pdrv->napipoll_rxq)
+			wake_up(&pdrv->napipoll_rxq->wq);
+		pdrv->napipoll_rxq = NULL;
+		pdrv->napipoll_cnt = 0;
 		return;
 	}
 
@@ -513,13 +521,24 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
 		FSM_DP_ERROR("%s: failed to enqueue rx packet\n", __func__);
 		goto free_rxbuf;
 	}
-	wake_up(&rxq->wq);
 done:
 	pdrv->stats.rx_cnt++;
+	if (pdrv->napipoll_rxq && (rxq != pdrv->napipoll_rxq ||
+		pdrv->napipoll_cnt >= FSM_DP_POLL_WAKEUP_MAX)) {
+		wake_up(&pdrv->napipoll_rxq->wq);
+		pdrv->napipoll_cnt = 1;
+	} else
+		pdrv->napipoll_cnt++;
+	pdrv->napipoll_rxq = rxq;
 	return;
 free_rxbuf:
 	pdrv->stats.rx_drop++;
 	fsm_dp_mempool_put_buf(mempool, addr);
+	if (pdrv->napipoll_rxq)
+		wake_up(&pdrv->napipoll_rxq->wq);
+	pdrv->napipoll_rxq = NULL;
+	pdrv->napipoll_cnt = 0;
+	return;
 }
 
 int fsm_dp_rx_init(struct fsm_dp_drv *pdrv)
@@ -818,8 +837,11 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 	struct fsm_dp_mhi *mhi;
 	int ret;
 
+
 	mhi = container_of(napi, struct fsm_dp_mhi, napi);
 	pdrv = mhi->pdrv;
+	pdrv->napipoll_rxq = NULL;
+	pdrv->napipoll_cnt = 0;
 	rx_work = mhi_poll(mhi->mhi_dev, budget);
 	if (rx_work < 0) {
 		rx_work = 0;
@@ -828,6 +850,11 @@ static int fsm_dp_poll(struct napi_struct *napi, int budget)
 		goto exit_poll;
 	}
 
+	if (pdrv->napipoll_rxq) {
+		wake_up(&pdrv->napipoll_rxq->wq);
+		pdrv->napipoll_rxq = NULL;
+		pdrv->napipoll_cnt = 0;
+	}
 	ret = fsm_dp_mhi_rx_replenish(pdrv, mhi);
 	if (ret == -ENOMEM)
 		schedule_work(&mhi->alloc_work);  /* later */
