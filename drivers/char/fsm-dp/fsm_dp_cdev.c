@@ -182,7 +182,7 @@ static int __cdev_tx(
 			}
 			p->state = FSM_DP_BUF_STATE_KERNEL_XMIT_DMA;
 			if (p->xmit_status == FSM_DP_XMIT_IN_PROGRESS)
-				FSM_DP_WARN(
+				FSM_DP_WARN_RATELIMITED(
 					"%s: buffer %llx xmit "
 					"in progress already. "
 					"xmit data may be corrupted.\n",
