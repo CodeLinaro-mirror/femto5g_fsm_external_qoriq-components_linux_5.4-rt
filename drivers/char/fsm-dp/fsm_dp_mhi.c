@@ -213,7 +213,7 @@ static void __mhi_ul_xfer_cb(
 		mempool = fsm_dp_find_mempool(drv, addr, false, &cl);
 
 	if (unlikely(mempool == NULL)) {
-		FSM_DP_ERROR("%s: cannot find mempool, addr=%p\n",
+		FSM_DP_ERROR_RATELIMITED("%s: cannot find mempool, addr=%p\n",
 			  __func__, addr);
 		return;
 	}
