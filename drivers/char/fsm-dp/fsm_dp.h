@@ -51,6 +51,9 @@ extern void *fsm_dp_ipc_log;
 #define FSM_DP_WARN(__msg, ...) \
 	FSM_IPC_LOG_WARN(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
 
+#define FSM_DP_ERROR_RATELIMITED(__msg, ...) \
+	FSM_IPC_LOG_ERROR_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
+
 struct vm_area_struct;
 
 #define MMAP_MEM_TYPE_SHIFT	24

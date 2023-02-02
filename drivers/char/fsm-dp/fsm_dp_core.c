@@ -518,7 +518,9 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
 	if (fsm_dp_ring_write(&rxq->ring, offset, 0, (llc) ?
 			FSM_DP_RING_HIGH_PRIORITY :
 				FSM_DP_RING_NORMAL_PRIORITY)) {
-		FSM_DP_ERROR("%s: failed to enqueue rx packet\n", __func__);
+		FSM_DP_ERROR_RATELIMITED(
+			"%s: failed to enqueue rx packet. rxqueue maybe full.\n",
+			__func__);
 		goto free_rxbuf;
 	}
 done:
