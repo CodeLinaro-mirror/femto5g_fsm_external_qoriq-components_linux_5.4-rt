@@ -22,6 +22,7 @@
 
 /* ipc logging */
 void *fsm_dp_ipc_log = NULL;
+enum fsm_dp_log_level fsm_dp_log_level = FSM_DP_LOG_LEVEL_INFO;
 
 #define DEFAULT_LOOPBACK_JOB_NUM 8192
 #define FSM_DP_NAPI_WEIGHT 64
