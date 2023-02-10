@@ -54,6 +54,21 @@ do { \
 			"[E][%s]: "__msg, __func__, ##__VA_ARGS__); \
 } while (0)
 
+#define FSM_IPC_LOG_WARN_RATELIMITED(fsm_ipc_log_ctxt, __msg, ...) \
+do { \
+	pr_warn_ratelimited("[%s]: "__msg, __func__, ##__VA_ARGS__); \
+	if (fsm_ipc_log_ctxt) \
+		ipc_log_string(fsm_ipc_log_ctxt, \
+			"[E][%s]: "__msg, __func__, ##__VA_ARGS__); \
+} while (0)
+
+#define FSM_IPC_LOG_INFO_RATELIMITED(fsm_ipc_log_ctxt, __msg, ...) \
+do { \
+	pr_info_ratelimited("[%s]: "__msg, __func__, ##__VA_ARGS__); \
+	if (fsm_ipc_log_ctxt) \
+		ipc_log_string(fsm_ipc_log_ctxt, \
+			"[I][%s]: "__msg, __func__, ##__VA_ARGS__); \
+} while (0)
 
 /*
  * fsm_enable_ipc_logging: Wrapper to ipc_log_context_create()
@@ -119,6 +134,17 @@ do { \
 do { \
 	pr_err_ratelimited("[%s]: "__msg, __func__, ##__VA_ARGS__); \
 } while (0)
+
+#define FSM_IPC_LOG_WARN_RATELIMITED(fsm_ipc_log_ctxt, __msg, ...) \
+do { \
+	pr_warn_ratelimited("[%s]: "__msg, __func__, ##__VA_ARGS__); \
+} while (0)
+
+#define FSM_IPC_LOG_INFO_RATELIMITED(fsm_ipc_log_ctxt, __msg, ...) \
+do { \
+	pr_info_ratelimited("[%s]: "__msg, __func__, ##__VA_ARGS__); \
+} while (0)
+
 
 static inline void fsm_enable_ipc_logging(
 	void **fsm_ipc_log_ctxt_ptr,

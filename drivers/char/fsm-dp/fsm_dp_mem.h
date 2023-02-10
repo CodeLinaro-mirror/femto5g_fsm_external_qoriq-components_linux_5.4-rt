@@ -136,6 +136,8 @@ struct fsm_dp_mempool {
 	char *dummy_buf;
 	spinlock_t lock;
 	unsigned int pf_enable;
+	unsigned int dl_ifg_threshold;
+	unsigned int dl_max_dma_cmplt_time;
 };
 struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 	struct fsm_dp_drv *pdrv,

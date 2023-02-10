@@ -17,6 +17,7 @@
 #include "fsm_dp_mem.h"
 
 #define FSM_DP_MEMPOOL_RELEASE_DELAY	(HZ * 2)
+#define FSM_DP_MAX_DMA_CMPLT_DEFAULT	2 /* default of 2 ms */
 
 static inline struct fsm_dp_mempool *fsm_dp_mem_to_mempool(
 	struct fsm_dp_mem *mem)
@@ -724,6 +725,8 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 		FSM_DP_ERROR("%s: failed to initialize ring\n", __func__);
 		goto cleanup_mem;
 	}
+
+	mempool->dl_max_dma_cmplt_time = FSM_DP_MAX_DMA_CMPLT_DEFAULT;
 
 	fsm_dp_mempool_init(mempool);
 

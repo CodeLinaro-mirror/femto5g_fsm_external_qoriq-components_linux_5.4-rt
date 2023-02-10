@@ -21,6 +21,8 @@
 
 #define MEM_DUMP_COL_WIDTH 16
 #define MAX_MEM_DUMP_SIZE 256
+#define MILISEC 1000 /* milisecond in terms of microsecond */
+#define TWO_MILISEC (2 * MILISEC)
 
 #define DEFINE_DEBUGFS_OPS(name, __read, __write)		\
 static int name ##_open(struct inode *inode, struct file *file)	\
@@ -668,6 +670,11 @@ void fsm_dp_register_dl_traffic(struct fsm_dp_mempool *mempool,
 				.ts[FSM_DP_DL_SEND_DMA_COMP_INDEX],
 		&mempool->dl_traffic_profiling.entry[cur]
 				.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX]);
+
+	if (diff > (mempool->dl_max_dma_cmplt_time * MILISEC))
+		FSM_DP_WARN_RATELIMITED(
+			"%s: tx DMA taking %ld micro second to complete\n",
+                          __func__, diff);
 	if (diff > mempool->dl_traffic_profiling.max_dma_cmp)
 		mempool->dl_traffic_profiling.max_dma_cmp = diff;
 	if (diff < mempool->dl_traffic_profiling.min_dma_cmp)
@@ -686,6 +693,13 @@ void fsm_dp_register_dl_traffic(struct fsm_dp_mempool *mempool,
 			entry[cur].ts[FSM_DP_DL_APPL_SEND_REQ_INDEX],
 		&mempool->dl_traffic_profiling.
 			entry[prev].ts[FSM_DP_DL_APPL_SEND_REQ_INDEX]);
+
+	if (mempool->dl_ifg_threshold && diff > mempool->dl_ifg_threshold * MILISEC)
+		FSM_DP_WARN_RATELIMITED(
+			"%s: tx interfame gap %ld micro second exceeds"
+			" threshold of %d micro second\n",
+                          __func__, diff, mempool->dl_ifg_threshold * MILISEC);
+
 	if (diff > mempool->dl_traffic_profiling.max_frame_gap)
 		mempool->dl_traffic_profiling.max_frame_gap = diff;
 	if (diff < mempool->dl_traffic_profiling.min_frame_gap)
@@ -820,6 +834,77 @@ static ssize_t debugfs_mempool_traffic_pf_enable_write(
 DEFINE_DEBUGFS_OPS(debugfs_mempool_traffic_pf_enable,
 	debugfs_mempool_traffic_pf_enable_read,
 	debugfs_mempool_traffic_pf_enable_write);
+
+static int debugfs_mempool_DL_ifg_threshold_read(struct seq_file *s,
+	void *unused)
+{
+	struct fsm_dp_mempool *mempool =
+		*((struct fsm_dp_mempool **)s->private);
+
+	if (mempool)
+		seq_printf(s, "DL Inter Frame Gap Threshold %d mili second\n",
+			mempool->dl_ifg_threshold);
+	return 0;
+}
+
+static ssize_t debugfs_mempool_DL_ifg_threshold_write(
+	struct file *fp,
+	const char __user *buf,
+	size_t count,
+	loff_t *ppos)
+{
+	struct fsm_dp_mempool *mempool = *((struct fsm_dp_mempool **)
+			(((struct seq_file *)fp->private_data)->private));
+	unsigned int value = 0;
+
+	if (!mempool)
+		return -EINVAL;
+
+	if (kstrtouint_from_user(buf, count, 0, &value))
+		return -EFAULT;
+	mempool->dl_ifg_threshold = value;
+	return count;
+}
+
+DEFINE_DEBUGFS_OPS(debugfs_mempool_DL_ifg_threshold,
+	debugfs_mempool_DL_ifg_threshold_read,
+	debugfs_mempool_DL_ifg_threshold_write);
+
+static int debugfs_mempool_DL_max_dma_read(struct seq_file *s,
+	void *unused)
+{
+	struct fsm_dp_mempool *mempool =
+		*((struct fsm_dp_mempool **)s->private);
+
+	if (mempool)
+		seq_printf(s, "DL Max DMA Complete Time: %d mili second\n",
+			mempool->dl_max_dma_cmplt_time);
+	return 0;
+}
+
+static ssize_t debugfs_mempool_DL_max_dma_write(
+	struct file *fp,
+	const char __user *buf,
+	size_t count,
+	loff_t *ppos)
+{
+	struct fsm_dp_mempool *mempool = *((struct fsm_dp_mempool **)
+			(((struct seq_file *)fp->private_data)->private));
+	unsigned int value = 0;
+
+	if (!mempool)
+		return -EINVAL;
+
+	if (kstrtouint_from_user(buf, count, 0, &value))
+		return -EFAULT;
+	mempool->dl_max_dma_cmplt_time = value;
+	return count;
+}
+
+DEFINE_DEBUGFS_OPS(debugfs_mempool_DL_max_dma,
+	debugfs_mempool_DL_max_dma_read,
+	debugfs_mempool_DL_max_dma_write);
+
 
 static int debugfs_mempool_active_show(struct seq_file *s, void *unused)
 {
@@ -1204,6 +1289,18 @@ static int debugfs_create_mempool_dir(
 			entry = debugfs_create_file("DL_traffic_profiling",
 				0444, dentry, &drv->mempool[type],
 				&debugfs_mempool_DL_traffic_pf_ops);
+			if (!entry)
+				return -ENOMEM;
+
+			entry = debugfs_create_file("DL_inter_frame_gap_threshold",
+				0444, dentry, &drv->mempool[type],
+				&debugfs_mempool_DL_ifg_threshold_ops);
+			if (!entry)
+				return -ENOMEM;
+
+			entry = debugfs_create_file("DL_max_dma_req",
+				0444, dentry, &drv->mempool[type],
+				&debugfs_mempool_DL_max_dma_ops);
 			if (!entry)
 				return -ENOMEM;
 		}
