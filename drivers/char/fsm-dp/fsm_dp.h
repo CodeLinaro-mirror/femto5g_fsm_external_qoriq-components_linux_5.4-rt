@@ -152,8 +152,8 @@ struct vm_area_struct;
  */
 struct fsm_dp_mempool_vma {
 	struct fsm_dp_mempool **pp_mempool;
-	struct vm_area_struct *vma[FSM_DP_MMAP_TYPE_LAST];	/* mmap vma */
-	atomic_t refcnt[FSM_DP_MMAP_TYPE_LAST];
+	struct vm_area_struct *vma[FSM_DP_MMAP_TYPE_LAST + 1];	/* mmap vma */
+	atomic_t refcnt[FSM_DP_MMAP_TYPE_LAST + 1];
 	bool usr_alloc;	/* allocated by user using ioctl */
 };
 
@@ -183,10 +183,10 @@ struct fsm_dp_cdev {
 	pid_t pid;
 
 	/* vma mapping for memory pool */
-	struct fsm_dp_mempool_vma mempool_vma[FSM_DP_MEM_TYPE_LAST];
+	struct fsm_dp_mempool_vma mempool_vma[FSM_DP_MEM_TYPE_LAST + 1];
 
 	/* vma mapping for receiving queue */
-	struct fsm_dp_rxqueue_vma rxqueue_vma[FSM_DP_RX_TYPE_LAST];
+	struct fsm_dp_rxqueue_vma rxqueue_vma[FSM_DP_RX_TYPE_LAST + 1];
 	unsigned int tx_mode;
 };
 

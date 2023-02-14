@@ -544,7 +544,7 @@ static int __mempool_mem_mmap(
 	struct fsm_dp_mempool *mempool = *mempool_vma->pp_mempool;
 	struct fsm_dp_mem *mem;
 	unsigned long size;
-	int ret;
+	int ret = 0;
 	unsigned long addr = vma->vm_start;
 	int i;
 	unsigned long remainder;
@@ -868,7 +868,7 @@ static int fsm_dp_cdev_open(struct inode *inode, struct file *file)
 	struct fsm_dp_cdev *cdev;
 
 	cdev = kzalloc(sizeof(*cdev), GFP_KERNEL);
-	if (IS_ERR(cdev)) {
+	if (unlikely(!cdev)) {
 		FSM_DP_ERROR("%s: failed to alloc memory\n!", __func__);
 		return -ENOMEM;
 	}

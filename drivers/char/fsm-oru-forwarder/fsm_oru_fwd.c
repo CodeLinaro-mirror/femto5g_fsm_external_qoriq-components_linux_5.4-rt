@@ -1533,6 +1533,8 @@ static int fsm_queue_tx_skb(struct sk_buff *skb)
 
 	ecpri_hdr = (struct ecpri_common_header *)
 		skb_header_pointer(skb, 0, sizeof(*ecpri_hdr), &ecpri_hdr_buf);
+	if (!ecpri_hdr)
+		return -ENOMEM;
 	type = ((ecpri_hdr->msg_type != ECPRI_MSG_IQ_DATA)
 			&& (ecpri_hdr->msg_type != ECPRI_MSG_BIT_SEQ));
 
@@ -1541,7 +1543,7 @@ static int fsm_queue_tx_skb(struct sk_buff *skb)
 	if (skb->len < ecpri_plen) {
 		FSM_ORU_FWD_ERROR("%s: ill formatted ecpri msg length %d, packet length %d\n",
 				__func__, ecpri_plen, skb->len);
-		return -1;
+		return -EINVAL;
 	}
 
 	/* remove ethernet padding */
@@ -1586,7 +1588,7 @@ static int fsm_queue_tx_skb(struct sk_buff *skb)
 	flag = ecpri_cbit(ecpri_hdr);
 	if (fsm_dp_ex_ring_write(delay_ring, ring_element, flag)) {
 		pfsm_forwarder->fwd_stats.delay_queue_ovf_drop++;
-		return -1;
+		return -EIO;
 	}
 	pcnt = atomic_add_return(1, p_ecpri_delay_cnt);
 

@@ -351,7 +351,7 @@ static int fsm_dp_loopback_init(struct fsm_dp_loopback_task *task)
 
 	allocsz = DEFAULT_LOOPBACK_JOB_NUM * sizeof(struct fsm_dp_loopback_job);
 	job = kzalloc(allocsz, GFP_KERNEL);
-	if (IS_ERR(job)) {
+	if (unlikely(!job)) {
 		FSM_DP_ERROR("%s: failed to allocate memory\n", __func__);
 		destroy_workqueue(wq);
 		return -ENOMEM;
@@ -439,7 +439,11 @@ void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *addr, unsigned int length,
 	unsigned int cl;
 	struct fsm_dp_kernel_register_db_entry *preg;
 
-	if (unlikely(pdrv == NULL || addr == NULL || !length)) {
+	if (unlikely(!pdrv)) {
+		FSM_DP_ERROR("%s: invalid argument pdrv NULL\n", __func__);
+		return;
+	}
+	if (unlikely(addr == NULL || !length)) {
 		FSM_DP_ERROR("%s: invalid argument\n", __func__);
 		if (pdrv->napipoll_rxq)
 			wake_up(&pdrv->napipoll_rxq->wq);
@@ -900,7 +904,7 @@ static int fsm_dp_probe(struct platform_device *pdev)
 	FSM_DP_INFO("FSM-DP: probing FSM\n");
 
 	pdrv = kzalloc(sizeof(*pdrv), GFP_KERNEL);
-	if (IS_ERR(pdrv))
+	if (unlikely(!pdrv))
 		return -ENOMEM;
 
 	pdrv->dev = &pdev->dev;

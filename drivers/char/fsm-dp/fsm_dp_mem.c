@@ -214,7 +214,7 @@ void *fsm_dp_ex_ring_init(
 {
 	struct fsm_dp_ring *ring;
 	ring =   kzalloc(sizeof(*ring), GFP_KERNEL);
-	if (!ring)
+	if (unlikely(!ring))
 		return NULL;
 	if (fsm_dp_ring_init(ring, ringsz,
 			ringid, FSM_DP_RING_TYPE_SINGLE)) {
@@ -688,7 +688,7 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 	unsigned int cookie;
 
 	mempool = kzalloc(sizeof(*mempool), GFP_KERNEL);
-	if (IS_ERR(mempool)) {
+	if (unlikely(!mempool)) {
 		FSM_DP_ERROR("%s: failed to allocate mempool\n", __func__);
 		return NULL;
 	}
@@ -704,7 +704,7 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 	 */
 	if (type == FSM_DP_MEM_TYPE_UL) {
 		mempool->dummy_buf = kzalloc(buf_sz, GFP_KERNEL);
-		if (IS_ERR(mempool->dummy_buf)) {
+		if (unlikely(!mempool->dummy_buf)) {
 			mempool->dummy_buf = NULL;
 			goto cleanup;
 		}
