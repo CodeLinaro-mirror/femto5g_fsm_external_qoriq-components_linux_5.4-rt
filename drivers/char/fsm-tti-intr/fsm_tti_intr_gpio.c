@@ -96,7 +96,7 @@ static int __init fsm_tti_intr_probe(struct platform_device *pdev)
 
 	tti_intr_drv = kzalloc(sizeof(*tti_intr_drv) * MAX_FSM_TTI_DEVICE,
 					GFP_KERNEL);
-	if (IS_ERR(tti_intr_drv))
+	if (unlikely(!tti_intr_drv))
 		return -ENOMEM;
 	np = pdev->dev.of_node;
 	if (!np) {
