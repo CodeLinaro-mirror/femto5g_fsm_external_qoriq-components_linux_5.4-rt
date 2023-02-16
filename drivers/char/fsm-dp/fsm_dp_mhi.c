@@ -19,7 +19,9 @@
 #include "fsm_dp.h"
 #include "fsm_dp_mhi.h"
 
+/* __pdrv pointing to an array of fsm_dp_drv. */
 static struct fsm_dp_drv *__pdrv;
+
 
 
 /*
@@ -79,32 +81,26 @@ static int __mhi_rx_replenish(
 	int ret, i, to_xfer;
 	bool outofbuf;
 	unsigned int cluster, c_offset;
-	int total_buf =  mhi_get_total_descriptors(mhi_dev, DMA_FROM_DEVICE);
 
 	ret = 0;
-	/* if MHI TRE ring has entries more than threshold, skip replenishing */
-	if ((total_buf - nr) >= total_buf / 4)
+	if (nr < mhi_get_total_descriptors(mhi_dev, DMA_FROM_DEVICE) / 8)
 		return ret;
 	for (; nr > 0;) {
 		to_xfer = min(FSM_DP_MAX_IOV_SIZE, nr);
 		outofbuf = false;
 		for (i = 0; i < to_xfer; i++) {
-			if (outofbuf)
-				buf = mempool->dummy_buf;
-			else
-				buf = fsm_dp_mempool_get_buf(mempool, &cluster,
+			buf = fsm_dp_mempool_get_buf(mempool, &cluster,
 								&c_offset);
 			if (buf == NULL) {
 				mhi->stats.rx_out_of_buf++;
-				FSM_DP_INFO("%s: out of rx buffer!\n", __func__);
+				FSM_DP_DEBUG("%s: out of rx buffer!\n", __func__);
 				outofbuf = true;
 				buf = mempool->dummy_buf;
 			}
 			FSM_DP_ASSERT(!buf, "can not alloc buffer");
-			if (buf !=  mempool->dummy_buf) {
+			if (buf !=  mempool->dummy_buf)
 				fsm_dp_set_buf_state(buf,
 					FSM_DP_BUF_STATE_KERNEL_ALLOC_RECV_DMA);
-			}
 			mhi->ul_buf_array[i] = buf;
 			mhi->ul_size_array[i] = mempool->mem.buf_sz;
 			mhi->ul_flag_array[i] = MHI_EOT;
@@ -181,7 +177,7 @@ static void __mhi_ul_xfer_cb(
 {
 	struct fsm_dp_drv *drv;
 	struct fsm_dp_mhi *mhi;
-	void *addr = result->buf_addr;
+	void *addr;
 	struct fsm_dp_mempool *mempool;
 	unsigned int cl;
 
@@ -195,8 +191,9 @@ static void __mhi_ul_xfer_cb(
 		return;
 	}
 
-	mhi = mhi_device_get_devdata(mhi_dev);
-	drv = mhi->pdrv;
+	drv = mhi_device_get_devdata(mhi_dev);
+	mhi = &drv->mhi;
+	addr = result->buf_addr;
 	if (result->buf_indirect) {
 		__mhi_ul_skb_xfer_cmplt((struct sk_buff *) addr);
 		return;
@@ -213,8 +210,14 @@ static void __mhi_ul_xfer_cb(
 		mempool = fsm_dp_find_mempool(drv, addr, false, &cl);
 
 	if (unlikely(mempool == NULL)) {
-		FSM_DP_ERROR_RATELIMITED("%s: cannot find mempool, addr=%p\n",
+		FSM_DP_ERROR("%s: cannot find mempool, addr=%p\n",
 			  __func__, addr);
+		return;
+	}
+
+	if (mempool->signature != FSM_DP_MEMPOOL_SIG) {
+		FSM_DP_ERROR("%s: mempool %p signature 0x%x error, expect 0x%x\n",
+			  __func__, mempool, mempool->signature, FSM_DP_MEMPOOL_SIG);
 		return;
 	}
 
@@ -232,25 +235,17 @@ static void __mhi_ul_xfer_cb(
 		break;
 	default:
 		{
-			struct fsm_dp_buf_cntrl *p;
 			unsigned long cl_off;
+			struct fsm_dp_buf_cntrl *p;
 
 			cl_off = (char *) addr -
 				mempool->mem.loc.cluster_kernel_addr[cl];
 			cl_off = cl_off % fsm_dp_buf_true_size(&mempool->mem);
 			p = (struct fsm_dp_buf_cntrl *) (addr - cl_off);
-#ifdef FSM_DP_BUFFER_FENCING
-			if (p->state == FSM_DP_BUF_STATE_KERNEL_XMIT_DMA)
-				p->state =
-					FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP;
+			fsm_dp_collect_ts_dl_traffic_window(&drv->traffic, p);
+			if (p->state != FSM_DP_BUF_STATE_KERNEL_XMIT_DMA)
+				p->state = FSM_DP_BUF_STATE_KERNEL_XMIT_DMA_COMP;
 			p->xmit_status = FSM_DP_XMIT_OK;
-#endif
-			fsm_dp_set_buf_ts(mempool, (unsigned char *)p +
-					sizeof(struct fsm_dp_buf_cntrl),
-					FSM_DP_DL_SEND_DMA_COMP_INDEX);
-			if (mempool->pf_enable)
-				fsm_dp_register_dl_traffic(mempool, p);
-
 			wmb(); /* make it visible to other CPU */
 		}
 		break;
@@ -268,8 +263,8 @@ static void __mhi_dl_xfer_cb(
 	FSM_DP_DEBUG("%s: dl_xfer_result addr=%p dir=%u bytes=%lu status=%d\n",
 		  __func__, result->buf_addr, result->dir,
 		  result->bytes_xferd, result->transaction_status);
-	mhi = mhi_device_get_devdata(mhi_dev);
-	drv = mhi->pdrv;
+	drv = mhi_device_get_devdata(mhi_dev);
+	mhi = &drv->mhi;
 	mempool = drv->mempool[FSM_DP_MEM_TYPE_UL];
 	fsm_dp_hex_dump(result->buf_addr, result->bytes_xferd);
 	if (result->buf_addr == mempool->dummy_buf) {
@@ -285,33 +280,25 @@ static void __mhi_dl_xfer_cb(
 		fsm_dp_mempool_put_buf(mempool, result->buf_addr);
 	} else {
 		mhi->stats.rx_cnt++;
-		fsm_dp_set_buf_ts(mempool, result->buf_addr,
-				FSM_DP_UL_DMA_COMP_INDEX);
-		fsm_dp_rx(drv, result->buf_addr, result->bytes_xferd, mhi->llc);
+		fsm_dp_rx(drv, result->buf_addr, result->bytes_xferd);
 	}
 }
 
 static void __mhi_status_cb(struct mhi_device *mhi_dev, enum MHI_CB mhi_cb)
 {
-	struct fsm_dp_mhi *mhi = mhi_device_get_devdata(mhi_dev);
-	struct fsm_dp_drv *pdrv;
 
-
-	pdrv = mhi->pdrv;
+	struct fsm_dp_drv *pdrv = mhi_device_get_devdata(mhi_dev);
 
 	switch (mhi_cb) {
 	case MHI_CB_DEVICE_DESTROYED:
-		FSM_DP_WARN("%s: mhi%s device destroyed\n", __func__, (mhi->llc ? " LLC" : ""));
-		if (mhi->llc)
-			pdrv->mhi_llc.mhi_destroyed = true;
-		else
-			pdrv->mhi.mhi_destroyed = true;
+		FSM_DP_WARN("%s: mhi device destroyed\n", __func__);
+		pdrv->mhi.mhi_destroyed = true;
 		wmb();
 		fsm_dp_mempool_dev_destroy(pdrv);
 		break;
 	case MHI_CB_PENDING_DATA:
-		if (napi_schedule_prep(&mhi->napi)) {
-			__napi_schedule(&mhi->napi);
+		if (napi_schedule_prep(&pdrv->napi)) {
+			__napi_schedule(&pdrv->napi);
 			pdrv->stats.rx_int++;
 		}
 		break;
@@ -320,8 +307,9 @@ static void __mhi_status_cb(struct mhi_device *mhi_dev, enum MHI_CB mhi_cb)
 	}
 }
 
-int fsm_dp_mhi_rx_replenish(struct fsm_dp_drv *drv, struct fsm_dp_mhi *mhi)
+int fsm_dp_mhi_rx_replenish(struct fsm_dp_drv *drv)
 {
+	struct fsm_dp_mhi *mhi = &drv->mhi;
 	struct fsm_dp_mempool *mempool = drv->mempool[FSM_DP_MEM_TYPE_UL];
 	int ret;
 
@@ -337,30 +325,22 @@ static int fsm_dp_mhi_probe(
 	const struct mhi_device_id *id)
 {
 	struct fsm_dp_drv *pdrv = __pdrv;
-	struct fsm_dp_mhi *mhi;
 	int ret;
-	bool llc;
 
 	FSM_DP_DEBUG("%s: probing mhi\n", __func__);
 
-	FSM_DP_INFO("%s: probing mhi domain %d name %s mhi %llx dev %llx\n",
-			__func__, mhi_dev->domain, mhi_dev->chan_name,
-			(u64) mhi_dev, (u64) mhi_dev->mhi_cntrl->dev);
+	FSM_DP_INFO("%s: probing mhi domain %d\n", __func__, mhi_dev->domain);
+	if (mhi_dev->domain >= MAX_FSM_DP_DEVICE) {
+		FSM_DP_ERROR("%s: dmain %d exceeds maximum %d\n", __func__,
+			mhi_dev->domain, MAX_FSM_DP_DEVICE);
+		return 0;
+	}
 
-	if (!strcmp(mhi_dev->chan_name, "IP_HW_LLC"))
-		llc = true;
-	else
-		llc = false;
-	FSM_DP_INFO("%s: name %s mhi %llx LLC channel%d\n", __func__,
-			mhi_dev->chan_name, (u64) mhi_dev, llc);
 	if (__pdrv == NULL)
 		return -ENODEV;
-	if (llc)
-		mhi = &pdrv->mhi_llc;
-	else
-		mhi = &pdrv->mhi;
+	pdrv = pdrv + mhi_dev->domain;
 
-	mhi_device_set_devdata(mhi_dev, mhi);
+	mhi_device_set_devdata(mhi_dev, pdrv);
 
 	ret = mhi_prepare_for_transfer(mhi_dev);
 	if (ret) {
@@ -368,12 +348,10 @@ static int fsm_dp_mhi_probe(
 		return ret;
 	}
 
-	mhi->mhi_dev = mhi_dev;
-	mhi->mhi_destroyed = false;
-	mhi->llc = llc;
-	mhi->pdrv = pdrv;
-	spin_lock_init(&mhi->rx_lock);
-	spin_lock_init(&mhi->tx_lock);
+	pdrv->mhi.mhi_dev = mhi_dev;
+	pdrv->mhi.mhi_destroyed = false;
+	spin_lock_init(&pdrv->mhi.rx_lock);
+	spin_lock_init(&pdrv->mhi.tx_lock);
 
 	FSM_DP_INFO("%s: fsm_dp_mhi_rx_replenish\n", __func__);
 	if (pdrv->mempool[FSM_DP_MEM_TYPE_UL]) {
@@ -382,7 +360,7 @@ static int fsm_dp_mhi_probe(
 			fsm_dp_mempool_dma_map(pdrv,
 				pdrv->mempool[FSM_DP_MEM_TYPE_UL],
 				FSM_DP_MEM_TYPE_UL));
-		ret = fsm_dp_mhi_rx_replenish(pdrv, mhi);
+		ret = fsm_dp_mhi_rx_replenish(pdrv);
 		if (ret) {
 			FSM_DP_ERROR("%s: fsm_dp_mhi_rx_replenish failed\n",
 								__func__);
@@ -400,7 +378,6 @@ static void fsm_dp_mhi_remove(struct mhi_device *mhi_dev)
 
 static struct mhi_device_id fsm_dp_mhi_match_table[] = {
 	{ .chan = "IP_HW0" },
-	{ .chan = "IP_HW_LLC" },
 	{},
 };
 
@@ -417,7 +394,7 @@ static struct mhi_driver __fsm_dp_mhi_drv = {
 	},
 };
 
-
+/* pdrv pointing to an array of fsm_dp_drv. */
 int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv)
 {
 	int ret = -EBUSY;
@@ -427,36 +404,21 @@ int fsm_dp_mhi_init(struct fsm_dp_drv *pdrv)
 		ret = mhi_driver_register(&__fsm_dp_mhi_drv);
 		if (ret) {
 			__pdrv = NULL;
-			FSM_DP_ERROR("FSM-DP: mhi registration failed!\n");
+			pr_err("FSM-DP: mhi registration failed!\n");
 			return ret;
 		}
 
-		FSM_DP_INFO("FSM-DP: Register MHI driver!\n");
+		pr_info("FSM-DP: Register MHI driver!\n");
 	}
 	return ret;
 }
 
+/* pdrv pointing to an array of fsm_dp_drv. */
 void fsm_dp_mhi_cleanup(struct fsm_dp_drv *pdrv)
 {
-	struct mhi_device *mhi_dev;
-
 	if (__pdrv) {
-		FSM_DP_INFO("FSM-DP: fsm_dp_mhi_cleanup\n");
-		mhi_dev = pdrv->mhi.mhi_dev;
-		if (mhi_dev) {
-			FSM_DP_INFO("FSM-DP: unprepare %s\n",
-				mhi_dev->chan_name);
-			mhi_unprepare_from_transfer(mhi_dev);
-		}
-		mhi_dev = pdrv->mhi_llc.mhi_dev;
-		if (mhi_dev) {
-
-			FSM_DP_INFO("FSM-DP: unprepare %s\n",
-				mhi_dev->chan_name);
-			mhi_unprepare_from_transfer(mhi_dev);
-		}
 		mhi_driver_unregister(&__fsm_dp_mhi_drv);
 		__pdrv = NULL;
-		FSM_DP_INFO("FSM-DP: Unregister MHI driver\n");
+		pr_info("FSM-DP: Unregister MHI driver\n");
 	}
 }

@@ -91,8 +91,7 @@ static int __cdev_tx(
 	struct fsm_dp_cdev *cdev,
 	struct iovec __user *uiov,
 	unsigned int iov_nr,
-	bool sg,
-	bool llc)
+	bool sg)
 {
 	struct fsm_dp_drv *pdrv = cdev->pdrv;
 	struct fsm_dp_mempool_vma *mempool_vma;
@@ -107,6 +106,8 @@ static int __cdev_tx(
 #endif
 	unsigned int c_offset;
 	unsigned int cluster;
+	ktime_t start = 0;
+	struct fsm_dp_traffic *traffic = &pdrv->traffic;
 
 	FSM_DP_DEBUG("%s: iov_nr=%u\n", __func__, iov_nr);
 	if (iov_nr > FSM_DP_MAX_IOV_SIZE)
@@ -116,6 +117,7 @@ static int __cdev_tx(
 				   sizeof(struct iovec) * iov_nr))
 		return -EFAULT;
 
+	start = fsm_dp_traffic_ts_begin();
 	for (n = 0; n < iov_nr; n++) {
 		mempool_vma = find_mempool_vma(cdev,
 					       iov[n].iov_base,
@@ -135,18 +137,11 @@ static int __cdev_tx(
 					&cluster,
 					&c_offset);
 		if (!sg || !n) {
-
-			atomic_t *seqnum;
-
 			iov[n].iov_base = (char *)iov[n].iov_base -
 				sizeof(struct fsm_dp_msghdr);
 			iov[n].iov_len += sizeof(struct fsm_dp_msghdr);
-			if (llc)
-				seqnum = &pdrv->tx_seqnum_llc;
-			else
-				seqnum = &pdrv->tx_seqnum;
 			((struct fsm_dp_msghdr *)iov[n].iov_base)->sequence =
-				atomic_inc_return(seqnum);
+				atomic_inc_return(&pdrv->tx_seqnum);
 			c_offset -= sizeof(struct fsm_dp_msghdr);
 		}
 		{
@@ -157,11 +152,6 @@ static int __cdev_tx(
 			iov_off_array[n] = b_backtrack;
 			p = (struct fsm_dp_buf_cntrl *)
 				(iov[n].iov_base - b_backtrack);
-			fsm_dp_set_buf_ts(mempool,
-					(unsigned char *)p +
-					sizeof(struct fsm_dp_buf_cntrl),
-					FSM_DP_DL_KERNEL_SEND_REQ_INDEX);
-#ifdef FSM_DP_BUFFER_FENCING
 			if (p->signature != FSM_DP_BUFFER_SIG) {
 				FSM_DP_ERROR("%s: mempool type %d buffer at "
 					"kernel addr %p corrupted, %x, exp %x\n",
@@ -180,15 +170,9 @@ static int __cdev_tx(
 					FSM_DP_BUFFER_FENCE_SIG);
 				return -EINVAL;
 			}
-			p->state = FSM_DP_BUF_STATE_KERNEL_XMIT_DMA;
-			if (p->xmit_status == FSM_DP_XMIT_IN_PROGRESS)
-				FSM_DP_WARN_RATELIMITED(
-					"%s: buffer %llx xmit "
-					"in progress already. "
-					"xmit data may be corrupted.\n",
-					__func__, (u64) p);
 			p->xmit_status = FSM_DP_XMIT_IN_PROGRESS;
-#endif
+			fsm_dp_traffic_ts_store_dl_msg(traffic, p, start);
+			p->state = FSM_DP_BUF_STATE_KERNEL_XMIT_DMA;
 		}
 		atomic_inc(&mempool->out_xmit);
 		if (mempool->mem.loc.dma_mapped &&
@@ -212,8 +196,6 @@ static int __cdev_tx(
 		flag |= FSM_DP_TX_FLAG_SG;
 	if (cdev->tx_mode == TX_MODE_LOOPBACK)
 		flag |= FSM_DP_TX_FLAG_LOOPBACK;
-	if (llc)
-		flag |= FSM_DP_TX_FLAG_LLC;
 
 	ret = fsm_dp_tx(pdrv, iov, iov_nr, flag, dma_addr);
 
@@ -229,8 +211,10 @@ static int __cdev_tx(
 			p->xmit_status = ret;
 		}
 #endif
-	} else
+	} else {
 		ret = iov_nr;
+		fsm_dp_traffic_ts_dl_end(traffic, sg, iov_nr, start);
+	}
 	wmb(); /* make other CPU see */
 	return ret;
 }
@@ -303,7 +287,7 @@ static int __cdev_ioctl_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, false, false);
+	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, false);
 	return ret;
 }
 
@@ -318,37 +302,7 @@ static int __cdev_ioctl_sg_tx(struct fsm_dp_cdev *cdev, unsigned long ioarg)
 	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
 		return -EINVAL;
 
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, true, false);
-	return ret;
-}
-
-static int __cdev_ioctl_tx_llc(struct fsm_dp_cdev *cdev, unsigned long ioarg)
-{
-	struct iovec iov;
-	int ret;
-
-	if (copy_from_user(&iov, (void __user *)ioarg, sizeof(iov)))
-		return -EFAULT;
-
-	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
-		return -EINVAL;
-
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, false, true);
-	return ret;
-}
-
-static int __cdev_ioctl_sg_tx_llc(struct fsm_dp_cdev *cdev, unsigned long ioarg)
-{
-	struct iovec iov;
-	int ret;
-
-	if (copy_from_user(&iov, (void __user *)ioarg, sizeof(iov)))
-		return -EFAULT;
-
-	if (!iov.iov_len || iov.iov_len > FSM_DP_MAX_IOV_SIZE)
-		return -EINVAL;
-
-	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, true, true);
+	ret = __cdev_tx(cdev, iov.iov_base, iov.iov_len, true);
 	return ret;
 }
 
@@ -396,8 +350,7 @@ static int __cdev_ioctl_testring_write(
 
 	if (drv->test_ring.enable)
 		ret = fsm_dp_ring_write(&test_ring->ring,
-				     TEST_RING_WRITE_MAGIC_VALUE,
-					FSM_DP_RING_NORMAL_PRIORITY);
+				     TEST_RING_WRITE_MAGIC_VALUE, 0);
 	return ret;
 }
 
@@ -480,12 +433,6 @@ static long fsm_dp_cdev_ioctl(
 	case FSM_DP_IOCTL_TX_MODE_CONFIG:
 		ret = __cdev_ioctl_txmode_cfg(cdev, ioarg);
 		break;
-	case FSM_DP_IOCTL_TX_LLC:
-		ret = __cdev_ioctl_tx_llc(cdev, ioarg);
-		break;
-	case FSM_DP_IOCTL_SG_TX_LLC:
-		ret = __cdev_ioctl_sg_tx_llc(cdev, ioarg);
-		break;
 #ifdef CONFIG_FSM_DP_TEST
 	case FSM_DP_IOCTL_TEST_RING_WRITE:
 		ret = __cdev_ioctl_testring_write(cdev, ioarg);
@@ -493,7 +440,6 @@ static long fsm_dp_cdev_ioctl(
 	case FSM_DP_IOCTL_TEST_RING_GET_CONFIG:
 		ret = __cdev_ioctl_testring_getcfg(cdev, ioarg);
 		break;
-
 #endif
 	default:
 		break;
@@ -866,6 +812,15 @@ static int fsm_dp_cdev_open(struct inode *inode, struct file *file)
 	struct fsm_dp_drv *pdrv = container_of(inode->i_cdev,
 					    struct fsm_dp_drv, cdev);
 	struct fsm_dp_cdev *cdev;
+	unsigned int minor;
+
+	minor = iminor(inode);
+	if (minor >= MAX_FSM_DP_DEVICE) {
+		pr_err("device minor number %d should not be greater than 1 \n",
+			minor);
+		return -EINVAL;
+	}
+	pdrv += (iminor(inode));
 
 	cdev = kzalloc(sizeof(*cdev), GFP_KERNEL);
 	if (IS_ERR(cdev)) {
@@ -924,6 +879,9 @@ int fsm_dp_cdev_init(struct fsm_dp_drv *pdrv)
 	struct device *dev;
 	dev_t devno;
 	int ret;
+	struct fsm_dp_drv *p;
+	int i, numdev;
+	char fsm_device_name[256];
 
 	pdrv->dev_class = class_create(THIS_MODULE, FSM_DP_DEV_CLASS_NAME);
 	if (IS_ERR(pdrv->dev_class)) {
@@ -931,52 +889,80 @@ int fsm_dp_cdev_init(struct fsm_dp_drv *pdrv)
 		return -ENOMEM;
 	}
 
-	ret = alloc_chrdev_region(&devno, 0, 1, FSM_DP_CDEV_NAME);
+	ret = alloc_chrdev_region(&devno, 0, MAX_FSM_DP_DEVICE, FSM_DP_CDEV_NAME);
+
 	if (ret) {
 		FSM_DP_ERROR("%s: alloc_chrdev_region failed\n", __func__);
 		goto cleanup_class;
 	}
 
 	cdev_init(&pdrv->cdev, &fsm_dp_cdev_fops);
-	ret = cdev_add(&pdrv->cdev, devno, 1);
+	ret = cdev_add(&pdrv->cdev, devno, MAX_FSM_DP_DEVICE);
 	if (ret) {
 		FSM_DP_ERROR("%s: cdev_add failed!\n", __func__);
 		goto unregister_cdev;
 	}
-
-	dev = device_create(pdrv->dev_class, pdrv->dev, devno,
-			    pdrv, FSM_DP_CDEV_NAME);
-	if (IS_ERR(dev)) {
-		FSM_DP_ERROR("%s: device_create failed\n", __func__);
-		ret = PTR_ERR(dev);
-		goto del_cdev;
+	for (i = 1, p = pdrv + 1; i < MAX_FSM_DP_DEVICE; i++, p++) {
+		p->dev_class = pdrv->dev_class;
+		p->cdev = pdrv->cdev;
 	}
 
+	for (i = 0, p = pdrv, numdev = 0; i < MAX_FSM_DP_DEVICE; i++, p++) {
+		if (i == 0)
+			strlcpy(fsm_device_name, FSM_DP_CDEV_NAME,
+				sizeof(fsm_device_name));
+		else
+			snprintf(fsm_device_name, sizeof(fsm_device_name),
+				"%s%d", FSM_DP_CDEV_NAME, i + 1);
+		dev = device_create(p->dev_class, p->dev, MKDEV(MAJOR(devno), i),
+			    p, fsm_device_name);
+		if (IS_ERR(dev)) {
+			FSM_DP_ERROR("%s: %d-th fsm-dp device_create failed\n",
+				 __func__, i);
+			ret = PTR_ERR(dev);
+			dev = NULL;
+			goto del_cdev;
+		}
+		numdev++;
+	}
 	mutex_init(&pdrv->cdev_lock);
 	INIT_LIST_HEAD(&pdrv->cdev_head);
-
-	FSM_DP_INFO("FSM-DP: cdev initialized. __cdev_tx at 0x%p\n", __cdev_tx);
+	for (i = 1, p = pdrv + 1; i < MAX_FSM_DP_DEVICE; i++, p++) {
+		mutex_init(&p->cdev_lock);
+		INIT_LIST_HEAD(&p->cdev_head);
+	}
+	pr_info("FSM-DP: cdev initialized. __cdev_tx at 0x%p\n", __cdev_tx);
 	return 0;
 
 del_cdev:
+	for (i = 0; i < numdev; i++)
+		device_destroy(pdrv->dev_class,
+			MKDEV(MAJOR(pdrv->cdev.dev), i));
 	cdev_del(&pdrv->cdev);
 unregister_cdev:
-	unregister_chrdev_region(pdrv->cdev.dev, 1);
+	unregister_chrdev_region(pdrv->cdev.dev, MAX_FSM_DP_DEVICE);
 cleanup_class:
 	class_destroy(pdrv->dev_class);
 	pdrv->dev_class = NULL;
-	FSM_DP_ERROR("FSM-DP: failed to initialize cdev\n");
+	pr_err("FSM-DP: failed to initialize cdev\n");
 	return ret;
 }
 
 void fsm_dp_cdev_cleanup(struct fsm_dp_drv *pdrv)
 {
+	struct fsm_dp_drv *p;
+	int i;
+
 	if (pdrv->dev_class) {
-		device_destroy(pdrv->dev_class, pdrv->cdev.dev);
+		for (i = 0; i < MAX_FSM_DP_DEVICE; i++)
+			device_destroy(pdrv->dev_class,
+				MKDEV(MAJOR(pdrv->cdev.dev), i));
 		cdev_del(&pdrv->cdev);
-		unregister_chrdev_region(pdrv->cdev.dev, 1);
+		unregister_chrdev_region(pdrv->cdev.dev, MAX_FSM_DP_DEVICE);
 		class_destroy(pdrv->dev_class);
-		mutex_destroy(&pdrv->cdev_lock);
-		pdrv->dev_class = NULL;
+		for (i = 0, p = pdrv; i < MAX_FSM_DP_DEVICE; i++, p++) {
+			mutex_destroy(&p->cdev_lock);
+			p->dev_class = NULL;
+		}
 	}
 }

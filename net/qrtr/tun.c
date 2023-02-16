@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2018, Linaro Ltd */
+/* Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved. */
 
 #include <linux/miscdevice.h>
 #include <linux/module.h>
@@ -84,14 +85,11 @@ static ssize_t qrtr_tun_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (!kbuf)
 		return -ENOMEM;
 
-	if (!copy_from_iter_full(kbuf, len, from)) {
-		kfree(kbuf);
+	if (!copy_from_iter_full(kbuf, len, from))
 		return -EFAULT;
-	}
 
 	ret = qrtr_endpoint_post(&tun->ep, kbuf, len);
 
-	kfree(kbuf);
 	return ret < 0 ? ret : len;
 }
 

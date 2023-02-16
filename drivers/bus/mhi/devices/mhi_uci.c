@@ -1,4 +1,5 @@
 /* Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -20,7 +21,6 @@
 #include <linux/of_device.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
-#include <linux/termios.h>
 #include <linux/types.h>
 #include <linux/wait.h>
 #include <linux/uaccess.h>
@@ -53,12 +53,11 @@ struct uci_dev {
 	struct uci_chan ul_chan;
 	struct uci_chan dl_chan;
 	size_t mtu;
-	size_t actual_mtu; /* maximum size of incoming buffer */
 	int ref_count;
 	bool enabled;
-	u32 tiocm;
+#ifdef CONFIG_IPC_LOGGING
 	void *ipc_log;
-	enum MHI_DEBUG_LEVEL *ipc_log_lvl;
+#endif
 };
 
 struct mhi_uci_drv {
@@ -72,21 +71,69 @@ struct mhi_uci_drv {
 enum MHI_DEBUG_LEVEL msg_lvl = MHI_MSG_LVL_ERROR;
 
 #ifdef CONFIG_MHI_DEBUG
+
+#define IPC_LOG_LVL (MHI_MSG_LVL_VERBOSE)
+#define MHI_UCI_IPC_LOG_PAGES (25)
+
+#else
+
+#define IPC_LOG_LVL (MHI_MSG_LVL_ERROR)
+#define MHI_UCI_IPC_LOG_PAGES (1)
+
+#endif
+
+#ifdef CONFIG_MHI_DEBUG
+
+#ifdef CONFIG_IPC_LOGGING
 #define MSG_VERB(fmt, ...) do { \
-	if (msg_lvl <= MHI_MSG_LVL_VERBOSE) \
-		pr_err("[D][%s] " fmt, __func__, ##__VA_ARGS__); \
+		if (msg_lvl <= MHI_MSG_LVL_VERBOSE) \
+			pr_err("[D][%s] " fmt, __func__, ##__VA_ARGS__); \
+		if (uci_dev->ipc_log && (IPC_LOG_LVL <= MHI_MSG_LVL_VERBOSE)) \
+			ipc_log_string(uci_dev->ipc_log, "[D][%s] " fmt, \
+				       __func__, ##__VA_ARGS__); \
+	} while (0)
+#else
+#define MSG_VERB(fmt, ...) do { \
+		if (msg_lvl <= MHI_MSG_LVL_VERBOSE) \
+			pr_err("[D][%s] " fmt, __func__, ##__VA_ARGS__); \
 	} while (0)
 #endif
 
-#define MSG_LOG(fmt, ...) do { \
-	if (msg_lvl <= MHI_MSG_LVL_INFO) \
-		pr_err("[I][%s] " fmt, __func__, ##__VA_ARGS__); \
-	} while (0)
+#else
 
-#define MSG_ERR(fmt, ...) do { \
-	if (msg_lvl <= MHI_MSG_LVL_ERROR) \
-		pr_err("[E][%s] " fmt, __func__, ##__VA_ARGS__); \
+#define MSG_VERB(fmt, ...)
+
+#endif
+
+#ifdef CONFIG_IPC_LOGGING
+#define MSG_LOG(fmt, ...) do { \
+		if (msg_lvl <= MHI_MSG_LVL_INFO) \
+			pr_err("[I][%s] " fmt, __func__, ##__VA_ARGS__); \
+		if (uci_dev->ipc_log && (IPC_LOG_LVL <= MHI_MSG_LVL_INFO)) \
+			ipc_log_string(uci_dev->ipc_log, "[I][%s] " fmt, \
+				       __func__, ##__VA_ARGS__); \
 	} while (0)
+#else
+#define MSG_LOG(fmt, ...) do { \
+		if (msg_lvl <= MHI_MSG_LVL_INFO) \
+			pr_err("[I][%s] " fmt, __func__, ##__VA_ARGS__); \
+	} while (0)
+#endif
+
+#ifdef CONFIG_IPC_LOGGING
+#define MSG_ERR(fmt, ...) do { \
+		if (msg_lvl <= MHI_MSG_LVL_ERROR) \
+			pr_err("[E][%s] " fmt, __func__, ##__VA_ARGS__); \
+		if (uci_dev->ipc_log && (IPC_LOG_LVL <= MHI_MSG_LVL_ERROR)) \
+			ipc_log_string(uci_dev->ipc_log, "[E][%s] " fmt, \
+				       __func__, ##__VA_ARGS__); \
+	} while (0)
+#else
+#define MSG_ERR(fmt, ...) do { \
+		if (msg_lvl <= MHI_MSG_LVL_ERROR) \
+			pr_err("[E][%s] " fmt, __func__, ##__VA_ARGS__); \
+	} while (0)
+#endif
 
 #define MAX_UCI_DEVICES (64)
 
@@ -98,24 +145,22 @@ static int mhi_queue_inbound(struct uci_dev *uci_dev)
 	struct mhi_device *mhi_dev = uci_dev->mhi_dev;
 	int nr_trbs = mhi_get_no_free_descriptors(mhi_dev, DMA_FROM_DEVICE);
 	size_t mtu = uci_dev->mtu;
-	size_t actual_mtu = uci_dev->actual_mtu;
 	void *buf;
 	struct uci_buf *uci_buf;
 	int ret = -EIO, i;
 
 	for (i = 0; i < nr_trbs; i++) {
-		buf = kmalloc(mtu, GFP_KERNEL);
+		buf = kmalloc(mtu + sizeof(*uci_buf), GFP_KERNEL);
 		if (!buf)
 			return -ENOMEM;
 
-		uci_buf = buf + actual_mtu;
+		uci_buf = buf + mtu;
 		uci_buf->data = buf;
 
-		MSG_VERB("Allocated buf %d of %d size %ld\n", i, nr_trbs,
-			 actual_mtu);
+		MSG_VERB("Allocated buf %d of %d size %ld\n", i, nr_trbs, mtu);
 
-		ret = mhi_queue_transfer(mhi_dev, DMA_FROM_DEVICE, buf,
-					 actual_mtu, MHI_EOT);
+		ret = mhi_queue_transfer(mhi_dev, DMA_FROM_DEVICE, buf, mtu,
+					 MHI_EOT);
 		if (ret) {
 			kfree(buf);
 			MSG_ERR("Failed to queue buffer %d\n", i);
@@ -132,24 +177,11 @@ static long mhi_uci_ioctl(struct file *file,
 {
 	struct uci_dev *uci_dev = file->private_data;
 	struct mhi_device *mhi_dev = uci_dev->mhi_dev;
-	struct uci_chan *uci_chan = &uci_dev->dl_chan;
 	long ret = -ERESTARTSYS;
 
 	mutex_lock(&uci_dev->mutex);
-
-	if (cmd == TIOCMGET) {
-		spin_lock_bh(&uci_chan->lock);
-		ret = uci_dev->tiocm;
-		spin_unlock_bh(&uci_chan->lock);
-	} else if (uci_dev->enabled) {
+	if (uci_dev->enabled)
 		ret = mhi_ioctl(mhi_dev, cmd, arg);
-		if (!ret) {
-			spin_lock_bh(&uci_chan->lock);
-			uci_dev->tiocm = mhi_dev->tiocm;
-			spin_unlock_bh(&uci_chan->lock);
-		}
-	}
-
 	mutex_unlock(&uci_dev->mutex);
 
 	return ret;
@@ -212,16 +244,9 @@ static unsigned int mhi_uci_poll(struct file *file, poll_table *wait)
 	spin_lock_bh(&uci_chan->lock);
 	if (!uci_dev->enabled) {
 		mask = POLLERR;
-	} else {
-		if (!list_empty(&uci_chan->pending) || uci_chan->cur_buf) {
-			MSG_VERB("Client can read from node\n");
-			mask |= POLLIN | POLLRDNORM;
-		}
-
-		if (uci_dev->tiocm) {
-			MSG_VERB("Line status changed\n");
-			mask |= POLLPRI;
-		}
+	} else if (!list_empty(&uci_chan->pending) || uci_chan->cur_buf) {
+		MSG_VERB("Client can read from node\n");
+		mask |= POLLIN | POLLRDNORM;
 	}
 	spin_unlock_bh(&uci_chan->lock);
 
@@ -410,8 +435,8 @@ static ssize_t mhi_uci_read(struct file *file,
 
 		if (uci_dev->enabled)
 			ret = mhi_queue_transfer(mhi_dev, DMA_FROM_DEVICE,
-						 uci_buf->data,
-						 uci_dev->actual_mtu, MHI_EOT);
+						 uci_buf->data, uci_dev->mtu,
+						 MHI_EOT);
 		else
 			ret = -ERESTARTSYS;
 
@@ -436,22 +461,23 @@ read_error:
 
 static int mhi_uci_open(struct inode *inode, struct file *filp)
 {
-	struct uci_dev *uci_dev = NULL, *tmp_dev;
+	struct uci_dev *uci_dev;
 	int ret = -EIO;
 	struct uci_buf *buf_itr, *tmp;
 	struct uci_chan *dl_chan;
 
 	mutex_lock(&mhi_uci_drv.lock);
-	list_for_each_entry(tmp_dev, &mhi_uci_drv.head, node) {
-		if (tmp_dev->devt == inode->i_rdev) {
-			uci_dev = tmp_dev;
+	list_for_each_entry(uci_dev, &mhi_uci_drv.head, node) {
+		if (uci_dev->devt == inode->i_rdev) {
+			ret = 0;
 			break;
 		}
 	}
+	mutex_unlock(&mhi_uci_drv.lock);
 
 	/* could not find a minor node */
-	if (!uci_dev)
-		goto error_exit;
+	if (ret)
+		return ret;
 
 	mutex_lock(&uci_dev->mutex);
 	if (!uci_dev->enabled) {
@@ -479,7 +505,6 @@ static int mhi_uci_open(struct inode *inode, struct file *filp)
 
 	filp->private_data = uci_dev;
 	mutex_unlock(&uci_dev->mutex);
-	mutex_unlock(&mhi_uci_drv.lock);
 
 	return 0;
 
@@ -493,9 +518,6 @@ static int mhi_uci_open(struct inode *inode, struct file *filp)
 
  error_open_chan:
 	mutex_unlock(&uci_dev->mutex);
-
-error_exit:
-	mutex_unlock(&mhi_uci_drv.lock);
 
 	return ret;
 }
@@ -515,11 +537,8 @@ static void mhi_uci_remove(struct mhi_device *mhi_dev)
 
 	MSG_LOG("Enter\n");
 
-
-	mutex_lock(&mhi_uci_drv.lock);
-	mutex_lock(&uci_dev->mutex);
-
 	/* disable the node */
+	mutex_lock(&uci_dev->mutex);
 	spin_lock_irq(&uci_dev->dl_chan.lock);
 	spin_lock_irq(&uci_dev->ul_chan.lock);
 	uci_dev->enabled = false;
@@ -531,7 +550,9 @@ static void mhi_uci_remove(struct mhi_device *mhi_dev)
 	/* delete the node to prevent new opens */
 	device_destroy(mhi_uci_drv.class, uci_dev->devt);
 	uci_dev->dev = NULL;
+	mutex_lock(&mhi_uci_drv.lock);
 	list_del(&uci_dev->node);
+	mutex_unlock(&mhi_uci_drv.lock);
 
 	/* safe to free memory only if all file nodes are closed */
 	if (!uci_dev->ref_count) {
@@ -539,21 +560,17 @@ static void mhi_uci_remove(struct mhi_device *mhi_dev)
 		mutex_destroy(&uci_dev->mutex);
 		clear_bit(MINOR(uci_dev->devt), uci_minors);
 		kfree(uci_dev);
-		mutex_unlock(&mhi_uci_drv.lock);
 		return;
 	}
 
 	MSG_LOG("Exit\n");
 	mutex_unlock(&uci_dev->mutex);
-	mutex_unlock(&mhi_uci_drv.lock);
-
 }
 
 static int mhi_uci_probe(struct mhi_device *mhi_dev,
 			 const struct mhi_device_id *id)
 {
 	struct uci_dev *uci_dev;
-	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
 	int minor;
 	char node_name[32];
 	int dir;
@@ -589,8 +606,10 @@ static int mhi_uci_probe(struct mhi_device *mhi_dev,
 	snprintf(node_name, sizeof(node_name), "mhi_uci_%04x_%02u.%02u.%02u_%d",
 		 mhi_dev->dev_id, mhi_dev->domain, mhi_dev->bus, mhi_dev->slot,
 		 mhi_dev->ul_chan_id);
-	uci_dev->ipc_log = NULL;
-	uci_dev->ipc_log_lvl = &mhi_cntrl->log_lvl;
+#ifdef CONFIG_IPC_LOGGING
+	uci_dev->ipc_log = ipc_log_context_create(MHI_UCI_IPC_LOG_PAGES,
+						  node_name, 0);
+#endif
 
 	for (dir = 0; dir < 2; dir++) {
 		struct uci_chan *uci_chan = (dir) ?
@@ -601,7 +620,6 @@ static int mhi_uci_probe(struct mhi_device *mhi_dev,
 	};
 
 	uci_dev->mtu = min_t(size_t, id->driver_data, mhi_dev->mtu);
-	uci_dev->actual_mtu = uci_dev->mtu -  sizeof(struct uci_buf);
 	mhi_device_set_devdata(mhi_dev, uci_dev);
 	uci_dev->enabled = true;
 
@@ -645,30 +663,13 @@ static void mhi_dl_xfer_cb(struct mhi_device *mhi_dev,
 	}
 
 	spin_lock_irqsave(&uci_chan->lock, flags);
-	buf = mhi_result->buf_addr + uci_dev->actual_mtu;
+	buf = mhi_result->buf_addr + uci_dev->mtu;
 	buf->data = mhi_result->buf_addr;
 	buf->len = mhi_result->bytes_xferd;
 	list_add_tail(&buf->node, &uci_chan->pending);
 	spin_unlock_irqrestore(&uci_chan->lock, flags);
 
-	if (mhi_dev->dev.power.wakeup)
-		__pm_wakeup_event(mhi_dev->dev.power.wakeup, 0);
-
 	wake_up(&uci_chan->wq);
-}
-
-static void mhi_status_cb(struct mhi_device *mhi_dev, enum MHI_CB reason)
-{
-	struct uci_dev *uci_dev = mhi_device_get_devdata(mhi_dev);
-	struct uci_chan *uci_chan = &uci_dev->dl_chan;
-	unsigned long flags;
-
-	if (reason == MHI_CB_DTR_SIGNAL) {
-		spin_lock_irqsave(&uci_chan->lock, flags);
-		uci_dev->tiocm = mhi_dev->tiocm;
-		spin_unlock_irqrestore(&uci_chan->lock, flags);
-		wake_up(&uci_chan->wq);
-	}
 }
 
 /* .driver_data stores max mtu */
@@ -690,7 +691,6 @@ static struct mhi_driver mhi_uci_driver = {
 	.probe = mhi_uci_probe,
 	.ul_xfer_cb = mhi_ul_xfer_cb,
 	.dl_xfer_cb = mhi_dl_xfer_cb,
-	.status_cb = mhi_status_cb,
 	.driver = {
 		.name = MHI_UCI_DRIVER_NAME,
 		.owner = THIS_MODULE,

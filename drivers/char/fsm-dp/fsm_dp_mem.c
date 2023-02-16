@@ -17,7 +17,6 @@
 #include "fsm_dp_mem.h"
 
 #define FSM_DP_MEMPOOL_RELEASE_DELAY	(HZ * 2)
-#define FSM_DP_MAX_DMA_CMPLT_DEFAULT	2 /* default of 2 ms */
 
 static inline struct fsm_dp_mempool *fsm_dp_mem_to_mempool(
 	struct fsm_dp_mem *mem)
@@ -131,80 +130,41 @@ static inline void __buf_mem_free(struct fsm_dp_mem_loc *loc)
 	}
 }
 
-/*
- * fsm_dp_ring_init: initialize a ring.
- * If type is FSM_DP_RING_TYPE_DOUBLE,
- * number of rings is 2, one for FSM_DP_RING_HIGH_PRIORITY, and one for
- * FSM_DP_RING_NORMAL_PRIORITY.
- * If type is FSM_DP_RING_TYPE_SINGLE, only one ring is defined for
- * FSM_DP_RING_NORMAL_PRIORITY.
- */
-
 int fsm_dp_ring_init(
 	struct fsm_dp_ring *ring,
 	unsigned int ringsz,
-	unsigned int mmap_cookie,
-	enum fsm_dp_ring_type type)
+	unsigned int mmap_cookie)
 {
-	unsigned int allocsz = ringsz * sizeof(fsm_dp_ring_element_t);
+	unsigned int allocsz = ringsz * sizeof(*ring->element);
 	char *aligned_ptr;
 	fsm_dp_ring_element_t *elem_p;
-	int i, j;
+	int i;
 
 	/* cons and prod index space, aligned to cache line */
 	allocsz += 4 * cache_line_size();
 	allocsz = ALIGN(allocsz, cache_line_size());
-	if (type == FSM_DP_RING_TYPE_DOUBLE)
-		allocsz = allocsz * 2;
 
 	if (__alloc_ring(allocsz, mmap_cookie, &ring->loc)) {
 		FSM_DP_ERROR("%s: failed to allocate ring memory\n", __func__);
 		return -ENOMEM;
 	}
-	ring->ring_type = type;
-	if (type == FSM_DP_RING_TYPE_SINGLE)
-		ring->num_ring = 1;
-	else if (type == FSM_DP_RING_TYPE_DOUBLE)
-		ring->num_ring = 2;
 
 	aligned_ptr = (char *)ALIGN((unsigned long)ring->loc.base,
 				    cache_line_size());
-	for (i = 0; i < ring->num_ring; i++) {
-		ring->ring[i].prod_head = (fsm_dp_ring_index_t *)aligned_ptr;
-		aligned_ptr += cache_line_size();
-
-		ring->ring[i].prod_tail = (fsm_dp_ring_index_t *)aligned_ptr;
-		aligned_ptr += cache_line_size();
-
-		ring->ring[i].cons_head = (fsm_dp_ring_index_t *)aligned_ptr;
-		aligned_ptr += cache_line_size();
-
-		ring->ring[i].cons_tail = (fsm_dp_ring_index_t *)aligned_ptr;
-		aligned_ptr += cache_line_size();
-	}
-
-	for (; i < FSM_DP_RING_TYPE_LAST; i++) {
-		ring->ring[i].prod_head = ring->ring[i].prod_tail =
-			ring->ring[i].cons_head = ring->ring[i].cons_tail =
-				NULL;
-	}
-
-	ring->num_ring_entries = ringsz;
-	for (i = 0; i < ring->num_ring; i++) {
-		ring->ring[i].element = elem_p =
-			(fsm_dp_ring_element_t *)aligned_ptr;
-		for (j = 0; j < ringsz; j++, elem_p++)
-			elem_p->element_ctrl = 1; /* not valid */
-		*ring->ring[i].prod_head = *ring->ring[i].prod_tail =
-			*ring->ring[i].cons_head =
-				*ring->ring[i].cons_tail = 0;
-		aligned_ptr = (char *)elem_p;
-		aligned_ptr = (char *)ALIGN((unsigned long) aligned_ptr,
-						cache_line_size());
-	}
-	for (; i < FSM_DP_RING_TYPE_LAST; i++)
-		ring->ring[i].element = 0;
-
+	ring->prod_head = (fsm_dp_ring_index_t *)aligned_ptr;
+	aligned_ptr += cache_line_size();
+	ring->prod_tail = (fsm_dp_ring_index_t *)aligned_ptr;
+	aligned_ptr += cache_line_size();
+	ring->cons_head = (fsm_dp_ring_index_t *)aligned_ptr;
+	aligned_ptr += cache_line_size();
+	ring->cons_tail = (fsm_dp_ring_index_t *)aligned_ptr;
+	aligned_ptr += cache_line_size();
+	ring->element = elem_p = (fsm_dp_ring_element_t *)aligned_ptr;
+	for (i = 0; i < ringsz; i++, elem_p++)
+		elem_p->element_ctrl = 1; /* not valid */
+	ring->size = ringsz;
+	*ring->prod_head = *ring->prod_tail = *ring->cons_head =
+						*ring->cons_tail = 0;
 	return 0;
 }
 
@@ -216,8 +176,7 @@ void *fsm_dp_ex_ring_init(
 	ring =   kzalloc(sizeof(*ring), GFP_KERNEL);
 	if (!ring)
 		return NULL;
-	if (fsm_dp_ring_init(ring, ringsz,
-			ringid, FSM_DP_RING_TYPE_SINGLE)) {
+	if (fsm_dp_ring_init(ring, ringsz, ringid)) {
 		kfree(ring);
 		return NULL;
 	} else
@@ -242,42 +201,22 @@ EXPORT_SYMBOL(fsm_dp_ex_ring_cleanup);
 
 int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg)
 {
-	int i;
-
 	if (unlikely(ring == NULL || cfg == NULL))
 		return -EINVAL;
 	cfg->mmap.length = ring->loc.size;
 	cfg->mmap.cookie = ring->loc.cookie;
 
-	cfg->size = ring->num_ring_entries;
-	cfg->ring_type = ring->ring_type;
-	cfg->num_ring = ring->num_ring;
-
-	for (i = 0; i < ring->num_ring; i++) {
-		cfg->ring[i].prod_head_off =
-			vaddr_offset((void *)ring->ring[i].prod_head,
-						ring->loc.base);
-		cfg->ring[i].prod_tail_off =
-			vaddr_offset((void *)ring->ring[i].prod_tail,
-						ring->loc.base);
-		cfg->ring[i].cons_head_off =
-			vaddr_offset((void *)ring->ring[i].cons_head,
-						ring->loc.base);
-		cfg->ring[i].cons_tail_off =
-			vaddr_offset((void *)ring->ring[i].cons_tail,
-						ring->loc.base);
-		cfg->ring[i].ringbuf_off =
-			vaddr_offset((void *)ring->ring[i].element,
-						ring->loc.base);
-	}
-
-	for (; i < FSM_DP_RING_TYPE_LAST; i++) {
-		cfg->ring[i].prod_head_off = 0;
-		cfg->ring[i].prod_tail_off = 0;
-		cfg->ring[i].cons_head_off = 0;
-		cfg->ring[i].cons_tail_off = 0;
-		cfg->ring[i].ringbuf_off = 0;
-	}
+	cfg->size = ring->size;
+	cfg->prod_head_off = vaddr_offset((void *)ring->prod_head,
+							ring->loc.base);
+	cfg->prod_tail_off = vaddr_offset((void *)ring->prod_tail,
+							ring->loc.base);
+	cfg->cons_head_off = vaddr_offset((void *)ring->cons_head,
+							ring->loc.base);
+	cfg->cons_tail_off = vaddr_offset((void *)ring->cons_tail,
+							ring->loc.base);
+	cfg->ringbuf_off = vaddr_offset((void *)ring->element,
+							ring->loc.base);
 	return 0;
 }
 
@@ -285,39 +224,30 @@ int fsm_dp_ring_get_cfg(struct fsm_dp_ring *ring, struct fsm_dp_ring_cfg *cfg)
 /* Read from ring */
 int fsm_dp_ring_read(
 	struct fsm_dp_ring *ring,
-	fsm_dp_ring_element_data_t *element_ptr,
-	unsigned int *flag,
-	enum fsm_dp_ring_type type)
+	fsm_dp_ring_element_data_t *element_ptr, unsigned int *flag)
 {
 	register fsm_dp_ring_index_t cons_head, cons_next, cons_tail;
 	register fsm_dp_ring_index_t prod_tail, mask;
 	fsm_dp_ring_element_data_t data;
-	fsm_dp_ring_index_t *ring_cons_head, *ring_prod_tail, *ring_cons_tail;
-	fsm_dp_ring_element_t *ring_element;
 
 	if (unlikely(ring == NULL))
 		return -EINVAL;
 
-	mask = ring->num_ring_entries - 1;
+	mask = ring->size - 1;
 
 again:
 	/* test to see if the ring is empty.
 	 * If not, advance cons_head and read the data
 	 */
-	ring_cons_head = ring->ring[type].cons_head;
-	ring_cons_tail = ring->ring[type].cons_tail;
-	ring_prod_tail = ring->ring[type].prod_tail;
-	ring_element = ring->ring[type].element;
-
-	cons_head = *ring_cons_head;
-	prod_tail = *ring_prod_tail;
+	cons_head = *ring->cons_head;
+	prod_tail = *ring->prod_tail;
 	rmb();	/* Get current cons_head and prod_tail */
 	if ((cons_head & mask) == (prod_tail & mask)) {
 		ring->opstats.read_empty++;
 		return -EAGAIN;
 	}
 	cons_next = cons_head + 1;
-	if (atomic_cmpxchg((atomic_t *)ring_cons_head,
+	if (atomic_cmpxchg((atomic_t *)ring->cons_head,
 			   cons_head,
 			   cons_next) != cons_head) {
 		ring->opstats.cons_head_updt_retry++;
@@ -325,21 +255,21 @@ again:
 	}
 
 	/* Read the ring */
-	data = ring_element[(cons_head & mask)].element_data;
+	data = ring->element[(cons_head & mask)].element_data;
 	if (flag)
-		*flag = ring_element[(cons_head & mask)].element_ctrl >> 1;
+		*flag = ring->element[(cons_head & mask)].element_ctrl >> 1;
 	rmb();	/* Get current element */
 
 	/* After read, write to ring with bit0 on */
 
-	ring_element[(cons_head & mask)].element_ctrl = 1;
+	ring->element[(cons_head & mask)].element_ctrl = 1;
 	wmb();	/* Ensure element is written */
 
 	if (element_ptr)
 		*element_ptr = data;
 
 	/* Move the tail */
-	cons_tail = *ring_cons_tail;
+	cons_tail = *ring->cons_tail;
 	rmb();	/* Get current cons_tail */
 
 	/* If tail is behind, let other producer to update it */
@@ -350,7 +280,7 @@ again:
 
 repeat:
 	/* Potential two consumer is updating */
-	if (atomic_cmpxchg((atomic_t *)ring_cons_tail,
+	if (atomic_cmpxchg((atomic_t *)ring->cons_tail,
 			   cons_tail,
 			   cons_next) != cons_tail) {
 		/* the other producer wins */
@@ -363,14 +293,14 @@ repeat:
 	cons_next++;
 
 	/* This consumer win, read the cons_head */
-	cons_head = *ring_cons_head;
+	cons_head = *ring->cons_head;
 	rmb();	/* Get current cons_head */
 
 	if (cons_tail == cons_head)
 		return 0;
 
 	/* The reader has not cleared the bit0 */
-	if (!(ring_element[(cons_tail & mask)].element_ctrl & 1)) {
+	if (!(ring->element[(cons_tail & mask)].element_ctrl & 1)) {
 		ring->opstats.cons_tail_updt_stop++;
 		return 0;
 	}
@@ -383,52 +313,35 @@ int fsm_dp_ex_ring_read(
 	fsm_dp_ring_element_data_t *element_ptr, unsigned int *flag)
 {
 
-	return fsm_dp_ring_read((struct fsm_dp_ring *)ring, element_ptr,
-					flag, FSM_DP_RING_NORMAL_PRIORITY);
+	return fsm_dp_ring_read((struct fsm_dp_ring *)ring, element_ptr, flag);
 }
 EXPORT_SYMBOL(fsm_dp_ex_ring_read);
 
 /* Write to ring */
-int fsm_dp_ring_write(
-	struct fsm_dp_ring *ring,
-	fsm_dp_ring_element_data_t data,
-	unsigned int flag,
-	enum fsm_dp_ring_type type)
+int fsm_dp_ring_write(struct fsm_dp_ring *ring, fsm_dp_ring_element_data_t data,
+		unsigned int flag)
 {
-	fsm_dp_ring_index_t *ring_prod_head, *ring_prod_tail;
-	fsm_dp_ring_index_t *ring_cons_tail;
-	register fsm_dp_ring_index_t prod_head, prod_next, prod_tail, cons_tail;
-	register fsm_dp_ring_index_t  mask;
-	fsm_dp_ring_element_t *ring_element;
+	register fsm_dp_ring_index_t prod_head, prod_next, prod_tail;
+	register fsm_dp_ring_index_t cons_tail, mask;
 
 	if (unlikely(ring == NULL))
 		return -EINVAL;
 
-	if ((ring->ring_type == FSM_DP_RING_TYPE_SINGLE &&
-			type == FSM_DP_RING_HIGH_PRIORITY)
-		|| type >= FSM_DP_RING_TYPE_LAST)
-		return -EINVAL;
-
-	mask = ring->num_ring_entries - 1;
+	mask = ring->size - 1;
 
 again:
-	ring_prod_head = ring->ring[type].prod_head;
-	ring_prod_tail = ring->ring[type].prod_tail;
-	ring_cons_tail = ring->ring[type].cons_tail;
-	ring_element = ring->ring[type].element;
-
 	/* test to see if the ring is full.
 	 * If not, advance prod_head and write the data
 	 */
-	prod_head = *ring_prod_head;
-	cons_tail = *ring_cons_tail;
+	prod_head = *ring->prod_head;
+	cons_tail = *ring->cons_tail;
 	rmb();	/* Get current prod_head and cons_tail */
 	prod_next = prod_head + 1;
 	if ((prod_next & mask) == (cons_tail & mask)) {
 		ring->opstats.write_full++;
 		return -EAGAIN;
 	}
-	if (atomic_cmpxchg((atomic_t *)ring_prod_head,
+	if (atomic_cmpxchg((atomic_t *)ring->prod_head,
 			   prod_head,
 			   prod_next) != prod_head) {
 		ring->opstats.prod_head_updt_retry++;
@@ -440,13 +353,13 @@ again:
 		data = prod_head << 1;
 #endif
 	/* Write to ring buffer with bit0 off */
-	ring_element[(prod_head & mask)].element_data = data;
-	ring_element[(prod_head & mask)].element_ctrl = flag << 1;
+	ring->element[(prod_head & mask)].element_data = data;
+	ring->element[(prod_head & mask)].element_ctrl = flag << 1;
 	wmb();	/* Ensure element is written */
 
 	ring->opstats.write_ok++;
 	/* Move the tail */
-	prod_tail = *ring_prod_tail;
+	prod_tail = *ring->prod_tail;
 	rmb();	/* Get current prod_tail */
 
 	/* If tail is behind, let other producer to update it */
@@ -457,7 +370,7 @@ again:
 
 repeat:
 	/* Potential two producer is updating */
-	if (atomic_cmpxchg((atomic_t *)ring_prod_tail,
+	if (atomic_cmpxchg((atomic_t *)ring->prod_tail,
 			   prod_tail,
 			   prod_next) != prod_tail) {
 		/* the other producer wins */
@@ -470,14 +383,14 @@ repeat:
 	prod_next++;
 
 	/* This producer win, read the prod_head */
-	prod_head = *ring_prod_head;
+	prod_head = *ring->prod_head;
 	rmb();	/* Get current prod_head */
 
 	if (prod_tail == prod_head)
 		return 0;
 
 	/* The writer has not written the data yet */
-	if (ring_element[(prod_tail & mask)].element_ctrl & 1) {
+	if (ring->element[(prod_tail & mask)].element_ctrl & 1) {
 		ring->opstats.prod_tail_updt_stop++;
 		return 0;
 	}
@@ -490,22 +403,19 @@ int fsm_dp_ex_ring_write(void *ring, fsm_dp_ring_element_data_t data,
 		unsigned int flag)
 {
 
-	return fsm_dp_ring_write((struct fsm_dp_ring *)ring, data, flag, false);
+	return fsm_dp_ring_write((struct fsm_dp_ring *)ring, data, flag);
 }
 EXPORT_SYMBOL(fsm_dp_ex_ring_write);
 
 bool fsm_dp_ring_is_empty(struct fsm_dp_ring *ring)
 {
 	fsm_dp_ring_index_t prod_tail, cons_tail;
-	int i;
-	bool ret = true;
 
-	for (i = 0; i < ring->num_ring; i++) {
-		prod_tail = *ring->ring[i].prod_tail;
-		cons_tail = *ring->ring[i].cons_tail;
-		ret = (ret && prod_tail == cons_tail);
-	}
-	return ret;
+	prod_tail = *ring->prod_tail;
+	cons_tail = *ring->cons_tail;
+	if (prod_tail == cons_tail)
+		return true;
+	return false;
 }
 
 bool fsm_dp_ex_ring_is_empty(void *ring)
@@ -529,7 +439,7 @@ static int fsm_dp_mem_init(
 
 	mem->buf_cnt = bufcnt;
 	mem->buf_sz = ALIGN(bufsz, cache_line_size());
-	mem->buf_overhead_sz = FSM_DP_MSG_CNTL_BLK;
+	mem->buf_overhead_sz = FSM_DP_L1_CACHE_BYTES;
 
 	num_buf_cl = FSM_DP_MEMPOOL_CLUSTER_SIZE / fsm_dp_buf_true_size(mem);
 	num_cl = bufcnt / num_buf_cl;
@@ -565,13 +475,13 @@ static void fsm_dp_mem_cleanup(struct fsm_dp_mem *mem)
 	if (mem->loc.dma_mapped) {
 		size = mem->loc.size;
 		for (i = 0; i < mem->loc.num_cluster; i++) {
-			if (i == mem->loc.num_cluster - 1)
+			if (i ==  mem->loc.num_cluster - 1) {
 				dma_unmap_single(
 					pdrv->mhi.mhi_dev->mhi_cntrl->dev,
 					mem->loc.cluster_dma_addr[i],
 					size,
 					mem->loc.direction);
-			else {
+			} else {
 				dma_unmap_single(
 					pdrv->mhi.mhi_dev->mhi_cntrl->dev,
 					mem->loc.cluster_dma_addr[i],
@@ -597,7 +507,7 @@ static int fsm_dp_mem_get_cfg(
 
 	cfg->buf_sz = mem->buf_sz;
 	cfg->buf_cnt = mem->buf_cnt;
-	cfg->buf_overhead_sz = FSM_DP_MSG_CNTL_BLK;
+	cfg->buf_overhead_sz = FSM_DP_L1_CACHE_BYTES;
 	cfg->cluster_size = FSM_DP_MEMPOOL_CLUSTER_SIZE;
 	cfg->num_cluster = mem->loc.num_cluster;
 	cfg->buf_per_cluster = mem->loc.buf_per_cluster;
@@ -638,42 +548,21 @@ static void fsm_dp_mempool_init(struct fsm_dp_mempool *mempool)
 				if (mempool->type != FSM_DP_MEM_TYPE_UL)
 					p->xmit_status = FSM_DP_XMIT_OK;
 				/* pointing to start of user data */
-				ring->ring[FSM_DP_RING_NORMAL_PRIORITY].
-					element[buf_index].element_data =
+				ring->element[buf_index].element_data =
 					element_data + mem->buf_overhead_sz;
 				/* entry valid */
-				ring->ring[FSM_DP_RING_NORMAL_PRIORITY].
-					element[buf_index].element_ctrl = 0;
+				ring->element[buf_index].element_ctrl = 0;
 				element_data += fsm_dp_buf_true_size(mem);
 				buf_index++;
 			}
 		}
-		*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_head =
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_tail = 0;
-		*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head =
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail =
-					 mem->buf_cnt - 1;
+		*ring->cons_head = *ring->cons_tail = 0;
+		*ring->prod_head = *ring->prod_tail = mem->buf_cnt - 1;
 		wmb();	/* Ensure all the data are written */
 		break;
 	default:
 		break;
 	}
-}
-
-void mempool_traffic_pf_reset(struct fsm_dp_mempool *mempool)
-{
-	mempool->dl_traffic_profiling.max_dma_req = 0;
-	mempool->dl_traffic_profiling.max_dma_cmp = 0;
-	mempool->dl_traffic_profiling.max_frame_gap = 0;
-	mempool->dl_traffic_profiling.min_dma_req = 0xffffffff;
-	mempool->dl_traffic_profiling.min_dma_cmp = 0xffffffff;
-	mempool->dl_traffic_profiling.min_frame_gap = 0xffffffff;
-	mempool->dl_traffic_profiling.avg_dma_req = 0;
-	mempool->dl_traffic_profiling.avg_dma_cmp = 0;
-	mempool->dl_traffic_profiling.avg_frame_gap = 0;
-	mempool->dl_traffic_profiling.frame_count = 0;
-	mempool->dl_traffic_profiling.next = 0;
-	mempool->dl_traffic_profiling.wrap = false;
 }
 
 static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
@@ -696,7 +585,6 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 	mempool->drv = pdrv;
 	mempool->type = type;
 	mempool->signature = FSM_DP_MEMPOOL_SIG;
-	mempool_traffic_pf_reset(mempool);
 
 	/*
 	 * allocate dummy buffer for out of buffer condition
@@ -720,13 +608,10 @@ static struct fsm_dp_mempool *__fsm_dp_mempool_alloc(
 			fsm_dp_mempool_dma_map(pdrv, mempool, type))
 		goto cleanup_mem;
 	cookie = MMAP_COOKIE(type, FSM_DP_MMAP_TYPE_RING);
-	if (fsm_dp_ring_init(&mempool->ring, ring_sz, cookie,
-					FSM_DP_RING_TYPE_SINGLE)) {
+	if (fsm_dp_ring_init(&mempool->ring, ring_sz, cookie)) {
 		FSM_DP_ERROR("%s: failed to initialize ring\n", __func__);
 		goto cleanup_mem;
 	}
-
-	mempool->dl_max_dma_cmplt_time = FSM_DP_MAX_DMA_CMPLT_DEFAULT;
 
 	fsm_dp_mempool_init(mempool);
 
@@ -839,18 +724,14 @@ struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 {
 	struct fsm_dp_mempool *mempool;
 	unsigned int ring_sz;
-	unsigned int max_buf_sz;
-
-	max_buf_sz = (type == FSM_DP_MEM_TYPE_UL) ? FSM_DP_MAX_UL_MSG_LEN :
-				FSM_DP_MAX_DL_MSG_LEN;
 
 	if (unlikely(!buf_sz || !buf_cnt || !fsm_dp_mem_type_is_valid(type)))
 		return NULL;
-	if (unlikely(((ULONG_MAX) / (buf_sz + FSM_DP_MSG_CNTL_BLK) < buf_cnt)))
+	if (unlikely(((ULONG_MAX) / (buf_sz + FSM_DP_L1_CACHE_BYTES) < buf_cnt)))
 		return NULL;
-	if (buf_sz > max_buf_sz) {
+	if (buf_sz > FSM_DP_MAX_DL_MSG_LEN) {
 		FSM_DP_ERROR("%s: mempool alloc buffer size %d exceeds limit %d\n",
-			__func__, buf_sz, max_buf_sz);
+			__func__, buf_sz, FSM_DP_MAX_DL_MSG_LEN);
 		return NULL;
 	}
 	if (pdrv->mhi.mhi_destroyed) {
@@ -896,16 +777,12 @@ done:
 
 void fsm_dp_mempool_free(struct fsm_dp_mempool *mempool)
 {
-	struct fsm_dp_drv *pdrv = NULL;
-	enum fsm_dp_mem_type mempool_type;
+	struct fsm_dp_drv *pdrv = mempool->drv;
 
 	if (!mempool)
 		return;
-
-	pdrv = mempool->drv;
-	mempool_type = mempool->type;
 	fsm_dp_mempool_release_no_delay(mempool);
-	pdrv->mempool[mempool_type] = NULL;
+	pdrv->mempool[mempool->type] = NULL;
 	wmb();
 	return;
 }
@@ -1011,8 +888,7 @@ int fsm_dp_mempool_put_buf(struct fsm_dp_mempool *mempool, void *vaddr)
 #endif
 	offset += sizeof(struct fsm_dp_buf_cntrl);
 
-	ret = fsm_dp_ring_write(&mempool->ring,
-		(fsm_dp_ring_element_data_t)offset, 0, false);
+	ret = fsm_dp_ring_write(&mempool->ring, (fsm_dp_ring_element_data_t)offset, 0);
 	if (ret)
 		mempool->stats.buf_put_err++;
 	else
@@ -1036,8 +912,7 @@ void *fsm_dp_mempool_get_buf(struct fsm_dp_mempool *mempool,
 	if (unlikely(mempool == NULL))
 		return NULL;
 
-	if (fsm_dp_ring_read(&mempool->ring, &val, &flag,
-					FSM_DP_RING_NORMAL_PRIORITY)) {
+	if (fsm_dp_ring_read(&mempool->ring, &val, &flag)) {
 		mempool->stats.buf_get_err++;
 		return NULL;
 	}
@@ -1104,15 +979,6 @@ struct fsm_dp_mempool *fsm_dp_find_mempool(
 
 		mempool = pdrv->mempool[mem_type];
 		if (mempool) {
-			if (mempool->signature != FSM_DP_MEMPOOL_SIG) {
-				FSM_DP_ERROR(
-					"%s: mempool %p signature 0x%x error, expect 0x%x\n",
-					__func__,
-					mempool,
-					mempool->signature,
-					FSM_DP_MEMPOOL_SIG);
-				continue;
-			}
 			mem = &mempool->mem;
 			remainder = mem->loc.size;
 			for (clust = 0; clust < mem->loc.num_cluster;
@@ -1143,23 +1009,17 @@ bool fsm_dp_mem_ul_ring_sync(struct fsm_dp_drv *pdrv)
 	struct fsm_dp_ring *ring = &mempool->ring;
 	struct fsm_dp_mhi *mhi = &pdrv->mhi;
 
-	if (*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail !=
-		pdrv->fsm_dp_prev_ul_prod_tail) {
-
+	if (*ring->prod_tail != pdrv->fsm_dp_prev_ul_prod_tail) {
 		pdrv->fsm_dp_outbuf_drop_sync = 0;
-		pdrv->fsm_dp_prev_ul_prod_tail =
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail;
+		pdrv->fsm_dp_prev_ul_prod_tail = *ring->prod_tail;
 		return false;
 	}
 	if (pdrv->fsm_dp_outbuf_drop_sync++ >= FSM_DP_SYNC_THRESHOLD) {
-		if (*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail !=
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head) {
 
-			FSM_DP_WARN("%s prod head %d prod tail %d\n", __func__,
-				*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head,
-				*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail);
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail =
-				*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head;
+		if (*ring->prod_tail != *ring->prod_head) {
+			pr_warn("%s prod head %d prod tail %d\n", __func__,
+				*ring->prod_head, *ring->prod_tail);
+			*ring->prod_tail = *ring->prod_head;
 			mhi->stats.rx_resync++;
 			wmb();
 			pdrv->fsm_dp_outbuf_drop_sync = 0;

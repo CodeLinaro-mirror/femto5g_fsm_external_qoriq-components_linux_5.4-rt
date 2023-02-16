@@ -26,8 +26,8 @@
 #include <linux/netdevice.h>
 #include <linux/atomic.h>
 #include <linux/workqueue.h>
+#include <linux/fsm_dp_intf.h>
 #include <linux/fsm_dp_ioctl.h>
-#include <linux/fsm_ipc_logging.h>
 
 #include "fsm_dp_mhi.h"
 #include "fsm_dp_mem.h"
@@ -36,71 +36,10 @@
 #define FSM_DP_DEV_CLASS_NAME	FSM_DP_MODULE_NAME
 #define FSM_DP_CDEV_NAME	FSM_DP_MODULE_NAME
 
-/* ipc logging */
-extern void *fsm_dp_ipc_log;
-enum fsm_dp_log_level {
-	FSM_DP_LOG_LEVEL_DEBUG = 0,
-	FSM_DP_LOG_LEVEL_INFO = 1,
-	FSM_DP_LOG_LEVEL_WARN = 2,
-	FSM_DP_LOG_LEVEL_ERROR = 3,
-	FSM_DP_LOG_LEVEL_DISABLE = 0xff,
-};
-extern enum fsm_dp_log_level fsm_dp_log_level;
-
-#define FSM_DP_DEBUG(__msg, ...) \
-	do { \
-		if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_DEBUG) \
-			FSM_IPC_LOG_DEBUG(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-	} while (0)
-
-#define FSM_DP_INFO(__msg, ...) \
-	do { \
-		if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_INFO) \
-			FSM_IPC_LOG_INFO(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-	} while (0)
-
-
-#define FSM_DP_ERROR(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_ERROR) \
-		FSM_IPC_LOG_ERROR(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_WARN(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_WARN) \
-		FSM_IPC_LOG_WARN(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_ERROR_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_ERROR) \
-		FSM_IPC_LOG_ERROR_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_WARN_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_WARN) \
-		FSM_IPC_LOG_WARN_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_INFO_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_INFO) \
-		FSM_IPC_LOG_INFO_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_DEBUG_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_DEBUG) \
-		FSM_IPC_LOG_DEBUG_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_WARN_RATELIMITED(__msg, ...) \
-	FSM_IPC_LOG_WARN_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
-
-#define FSM_DP_INFO_RATELIMITED(__msg, ...) \
-	FSM_IPC_LOG_INFO_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
+#define FSM_DP_DEBUG	pr_debug
+#define FSM_DP_INFO	pr_info
+#define FSM_DP_ERROR	pr_err
+#define FSM_DP_WARN	pr_warn
 
 struct vm_area_struct;
 
@@ -135,14 +74,14 @@ struct vm_area_struct;
 
 #define FSM_DP_TX_FLAG_SG	0x01
 #define FSM_DP_TX_FLAG_LOOPBACK	0x02
-#define FSM_DP_TX_FLAG_LLC	0x04
 
 #define FSM_DP_ASSERT(cond, msg) do { \
 	if (cond) \
 		panic(msg); \
 } while (0)
 
-#define FSM_DP_POLL_WAKEUP_MAX 8
+
+#define MAX_FSM_DP_DEVICE 2
 
 /*
  * vma mapping for mempool which includes
@@ -209,7 +148,6 @@ struct fsm_dp_loopback_job {
 	unsigned int length;
 	unsigned int dest;
 	bool rx_loopback;
-	bool llc;
 };
 
 struct fsm_dp_loopback_task {
@@ -239,27 +177,52 @@ struct fsm_dp_core_stats {
 	unsigned long rx_budget_overflow;
 };
 
+#define FSM_DP_TRAFFIC_ARRAY_SIZE 256
+struct fsm_dp_time_stamp {
+	ktime_t arrival_ktime;
+	ktime_t complete_ktime;
+};
+
+struct fsm_dp_traffic {
+
+	bool traffic_timestamp;
+
+	int ul_traffic_index;
+	bool ul_traffic_collect_done;
+	bool ul_traffic_collect;
+	struct fsm_dp_time_stamp ul_traffic[FSM_DP_TRAFFIC_ARRAY_SIZE];
+
+	int dl_traffic_index;
+	bool dl_traffic_collect_done;
+	bool dl_traffic_collect;
+	struct fsm_dp_time_stamp dl_traffic[FSM_DP_TRAFFIC_ARRAY_SIZE];
+
+	ktime_t dl_ktime;
+	ktime_t ul_ktime;
+	unsigned long dl_cnt;
+	unsigned long ul_cnt;
+};
+
 struct fsm_dp_drv {
 	struct device *dev;
 	struct class *dev_class;
 	struct fsm_dp_mhi mhi;
-	struct fsm_dp_mhi mhi_llc;
 	struct cdev cdev;
 	struct net_device dummy_dev;
+	struct napi_struct napi;
 	struct mutex cdev_lock;
 	struct list_head cdev_head;
 	struct mutex mempool_lock;
 	atomic_t tx_seqnum;
-	atomic_t tx_seqnum_llc;
 	struct fsm_dp_mempool *mempool[FSM_DP_MEM_TYPE_LAST];
 	struct fsm_dp_rxqueue rxq[FSM_DP_RX_TYPE_LAST];
 	struct fsm_dp_loopback_task loopback;
 	struct fsm_dp_core_stats stats;
 	struct work_struct alloc_work;
+	struct fsm_dp_traffic traffic;
 	unsigned int fsm_dp_outbuf_drop_sync;
 	fsm_dp_ring_index_t fsm_dp_prev_ul_prod_tail;
-	struct fsm_dp_rxqueue *napipoll_rxq;
-	unsigned int napipoll_cnt;
+
 #ifdef CONFIG_FSM_DP_TEST
 	struct fsm_dp_test_ring test_ring;
 #endif
@@ -287,8 +250,7 @@ int fsm_dp_tx(
 	unsigned int flag,
 	dma_addr_t dma_addr[]);
 
-void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *data,
-			unsigned int length, bool llc);
+void fsm_dp_rx(struct fsm_dp_drv *pdrv, void *data, unsigned int length);
 
 void fsm_dp_hex_dump(unsigned char *buf, unsigned int len);
 
@@ -314,5 +276,93 @@ fsm_dp_find_reg_db_type(enum fsm_dp_msg_type msg_type)
 };
 
 void fsm_dp_mempool_dev_destroy(struct fsm_dp_drv *pdrv);
+
+static inline void fsm_dp_collect_ts_dl_traffic_window(
+	struct fsm_dp_traffic *traffic,
+	struct fsm_dp_buf_cntrl *pbuf)
+{
+	ktime_t start;
+
+	if (traffic->traffic_timestamp && traffic->dl_traffic_collect &&
+		!traffic->dl_traffic_collect_done) {
+		start = *((ktime_t *)(&pbuf->ts));
+		if (traffic->dl_traffic_index >= 0) {
+			struct fsm_dp_time_stamp *pt;
+
+			pt = &traffic->dl_traffic[traffic->dl_traffic_index];
+			pt->arrival_ktime = start;
+			pt->complete_ktime = ktime_get();
+		}
+		if (++traffic->dl_traffic_index >= FSM_DP_TRAFFIC_ARRAY_SIZE) {
+			traffic->dl_traffic_collect = false;
+			traffic->dl_traffic_collect_done = true;
+		}
+	}
+};
+
+static inline ktime_t fsm_dp_traffic_ts_begin(void)
+{
+	return ktime_get();
+};
+
+static inline void fsm_dp_traffic_ts_store_dl_msg(
+	struct fsm_dp_traffic *traffic,
+	struct fsm_dp_buf_cntrl *pbuf,
+	ktime_t msg_start)
+{
+	if (traffic->traffic_timestamp)
+		*((ktime_t *)(&pbuf->ts)) = msg_start;
+};
+
+static inline void fsm_dp_traffic_ts_dl_end(
+	struct fsm_dp_traffic *traffic,
+	bool sg,
+	unsigned int iov_nr,
+	ktime_t msg_start)
+{
+
+	if (traffic->traffic_timestamp) {
+		if (sg) {
+			traffic->dl_cnt++;
+			traffic->dl_ktime += (ktime_get() - msg_start);
+		} else {
+			traffic->dl_cnt += iov_nr;
+			traffic->dl_ktime +=
+				(ktime_get() - msg_start) * iov_nr;
+		}
+	}
+}
+
+static inline void fsm_dp_traffic_ts_ul_end_and_collect(
+	struct fsm_dp_traffic *traffic,
+	struct fsm_dp_buf_cntrl *pbuf,
+	ktime_t msg_start)
+{
+	ktime_t end, service;
+
+	if (!traffic->traffic_timestamp)
+		return;
+	end = ktime_get();
+	pbuf->ts = ktime_to_timespec(end);
+	service = end - msg_start;
+	traffic->ul_cnt++;
+	traffic->ul_ktime += service;
+	if (traffic->ul_traffic_collect &&
+			!traffic->ul_traffic_collect_done) {
+		struct fsm_dp_time_stamp *pt;
+
+		if (traffic->ul_traffic_index >= 0) {
+			pt = &traffic->ul_traffic[traffic->ul_traffic_index];
+
+			pt->arrival_ktime = msg_start;
+			pt->complete_ktime = end;
+		}
+		if (++traffic->ul_traffic_index >=
+					FSM_DP_TRAFFIC_ARRAY_SIZE) {
+			traffic->ul_traffic_collect = false;
+			traffic->ul_traffic_collect_done = true;
+		}
+	}
+}
 
 #endif /* __FSM_DP__ */

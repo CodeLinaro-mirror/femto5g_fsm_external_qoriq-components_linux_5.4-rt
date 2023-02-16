@@ -19,7 +19,7 @@
 
 struct fsm_dp_drv;
 
-#define MAX_FSM_DP_MEMPOOL_SIZE (1024 * 1024 * 512)
+#define MAX_FSM_DP_MEMPOOL_SIZE (1024 * 1024 * 64)
 #define FSM_DP_MEMPOOL_CLUSTER_SIZE (1024 * 256)
 #define FSM_DP_MEMPOOL_CLUSTER_SHIFT 18
 #define FSM_DP_MEMPOOL_CLUSTER_MASK (FSM_DP_MEMPOOL_CLUSTER_SIZE - 1)
@@ -71,21 +71,14 @@ struct fsm_dp_ring_opstats {
 	unsigned long prod_tail_updt_stop;
 };
 
-struct fsm_dp_ring_def {
+struct fsm_dp_ring {
+	struct fsm_dp_mem_loc loc;	/* location */
+	unsigned int size;		/* size of ring(power of 2) */
 	fsm_dp_ring_index_t *cons_head;	/* consumer index header */
 	fsm_dp_ring_index_t *cons_tail;	/* consumer index tail */
 	fsm_dp_ring_index_t *prod_head;	/* producer index header */
 	fsm_dp_ring_index_t *prod_tail;	/* producer index tail */
 	fsm_dp_ring_element_t *element;	/* ring element */
-};
-
-struct fsm_dp_ring {
-	enum fsm_dp_ring_type ring_type;/* ring type */
-	struct fsm_dp_mem_loc loc;      /* location */
-	unsigned int num_ring_entries;  /* number of ring element of the ring */
-                                        /* must be power of 2 */
-	unsigned int num_ring;
-	struct fsm_dp_ring_def ring[FSM_DP_RING_TYPE_LAST];
 	struct fsm_dp_ring_opstats opstats;
 };
 
@@ -101,28 +94,6 @@ struct fsm_dp_mempool_stats {
 #define FSM_DP_MEMPOOL_SIG 0xdeadbeef
 #define FSM_DP_MEMPOOL_SIG_BAD 0xbeefdead
 
-
-#define NUM_DL_PROFILING 256
-
-struct traffic_profiling_entry {
-	struct timespec ts[FSM_DP_TS];
-};
-struct fsm_dp_mempool_traffic_profiling {
-	bool wrap;
-	unsigned int next;
-	struct traffic_profiling_entry entry[NUM_DL_PROFILING];
-	unsigned long max_dma_req;
-	unsigned long max_dma_cmp;
-	unsigned long max_frame_gap;
-	unsigned long min_dma_req;
-	unsigned long min_dma_cmp;
-	unsigned long min_frame_gap;
-	unsigned long avg_dma_req;
-	unsigned long avg_dma_cmp;
-	unsigned long avg_frame_gap;
-	unsigned long frame_count;
-};
-
 struct fsm_dp_mempool {
 	unsigned int signature;
 	struct fsm_dp_drv *drv;
@@ -132,13 +103,10 @@ struct fsm_dp_mempool {
 	atomic_t ref;
 	atomic_t out_xmit;
 	struct fsm_dp_mempool_stats stats;
-	struct fsm_dp_mempool_traffic_profiling dl_traffic_profiling;
 	char *dummy_buf;
 	spinlock_t lock;
-	unsigned int pf_enable;
-	unsigned int dl_ifg_threshold;
-	unsigned int dl_max_dma_cmplt_time;
 };
+
 struct fsm_dp_mempool *fsm_dp_mempool_alloc(
 	struct fsm_dp_drv *pdrv,
 	enum fsm_dp_mem_type type,
@@ -183,22 +151,15 @@ static inline void fsm_dp_mempool_put(struct fsm_dp_mempool *mempool)
 int fsm_dp_ring_init(
 	struct fsm_dp_ring *ring,
 	unsigned int ringsz,
-	unsigned int mmap_cookie,
-	enum fsm_dp_ring_type type);
+	unsigned int mmap_cookie);
 
 void fsm_dp_ring_cleanup(struct fsm_dp_ring *ring);
 
-int fsm_dp_ring_read(
-	struct fsm_dp_ring *ring,
-	fsm_dp_ring_element_data_t *element_data,
-	unsigned int *flag,
-	enum fsm_dp_ring_type type);
+int fsm_dp_ring_read(struct fsm_dp_ring *ring, fsm_dp_ring_element_data_t *element_data,
+		unsigned int *flag);
 
-int fsm_dp_ring_write(
-	struct fsm_dp_ring *ring,
-	fsm_dp_ring_element_data_t element_data,
-	unsigned int flag,
-	enum fsm_dp_ring_type type);
+int fsm_dp_ring_write(struct fsm_dp_ring *ring, fsm_dp_ring_element_data_t element_data,
+		unsigned int flag);
 
 bool fsm_dp_ring_is_empty(struct fsm_dp_ring *ring);
 
@@ -295,21 +256,9 @@ static inline unsigned int calc_ring_size(unsigned int elements)
 /* set buffer state, ptr: pointing to beginging of buffer user data */
 static inline void fsm_dp_set_buf_state(void *ptr, enum fsm_dp_buf_state state)
 {
-	struct fsm_dp_buf_cntrl *pf = (ptr - FSM_DP_MSG_CNTL_BLK);
+	struct fsm_dp_buf_cntrl *pf = (ptr - FSM_DP_L1_CACHE_BYTES);
 
 	pf->state = state;
-}
-
-/* set buffer state, ptr: pointing to beginging of buffer user data */
-static inline void fsm_dp_set_buf_ts(struct fsm_dp_mempool *mempool,
-			void *ptr, int index)
-{
-	struct fsm_dp_buf_cntrl *pf = (ptr - FSM_DP_MSG_CNTL_BLK);
-
-	if (mempool->pf_enable)
-		ktime_get_ts(&pf->ts[index]);
-	else
-		memset(&pf->ts[0], 0, sizeof(struct timespec));
 }
 
 /* get true buffer size which includes size for user space and control  */
@@ -373,10 +322,5 @@ static inline unsigned long fsm_dp_get_mem_offset(void *addr,
 	offset += cl * FSM_DP_MEMPOOL_CLUSTER_SIZE;
 	return offset;
 }
-
-void fsm_dp_register_dl_traffic(struct fsm_dp_mempool *mempool,
-	struct fsm_dp_buf_cntrl *pf);
-
-void mempool_traffic_pf_reset(struct fsm_dp_mempool *mempool);
 
 #endif /* __FSM_DP_MEM_H__ */

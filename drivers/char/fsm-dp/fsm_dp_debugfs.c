@@ -21,8 +21,6 @@
 
 #define MEM_DUMP_COL_WIDTH 16
 #define MAX_MEM_DUMP_SIZE 256
-#define MILISEC 1000 /* milisecond in terms of microsecond */
-#define TWO_MILISEC (2 * MILISEC)
 
 #define DEFINE_DEBUGFS_OPS(name, __read, __write)		\
 static int name ##_open(struct inode *inode, struct file *file)	\
@@ -133,33 +131,12 @@ static int __fsm_dp_ring_runtime_dump(
 	struct seq_file *s,
 	struct fsm_dp_ring *ring)
 {
-	seq_printf(s, "ProdHdr:                %u\n",
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head);
-	seq_printf(s, "ProdTail:               %u\n",
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail);
-	seq_printf(s, "ConsHdr:                %u\n",
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_head);
-	seq_printf(s, "ConsTail:               %u\n",
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_tail);
+	seq_printf(s, "ProdHdr:                %u\n", *ring->prod_head);
+	seq_printf(s, "ProdTail:               %u\n", *ring->prod_tail);
+	seq_printf(s, "ConsHdr:                %u\n", *ring->cons_head);
+	seq_printf(s, "ConsTail:               %u\n", *ring->cons_tail);
 	seq_printf(s, "NumOfElementAvail:      %u\n",
-		   (*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head -
-			*ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_tail) &
-				(ring->num_ring_entries - 1));
-	if (ring->ring_type == FSM_DP_RING_TYPE_SINGLE)
-		return 0;
-	seq_printf(s, "High Priority:\n");
-	seq_printf(s, "    ProdHdr:            %u\n",
-			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_head);
-	seq_printf(s, "    ProdTail:           %u\n",
-			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_tail);
-	seq_printf(s, "    ConsHdr:            %u\n",
-			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_head);
-	seq_printf(s, "    ConsTail:           %u\n",
-			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_tail);
-	seq_printf(s, "    NumOfElementAvail:  %u\n",
-		   (*ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_head -
-			*ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_tail) &
-					(ring->num_ring_entries - 1));
+		   (*ring->prod_head - *ring->cons_tail) & (ring->size - 1));
 	return 0;
 }
 
@@ -167,39 +144,16 @@ static int __fsm_dp_ring_config_dump(
 	struct seq_file *s,
 	struct fsm_dp_ring *ring)
 {
-	seq_printf(s, "Ring %llx MemoryAlloc:\n",
-			(u64) ring);
-	seq_printf(s, "         AllocAddr:     %llx\n",
-			(u64) ring->loc.base);
-	seq_printf(s, "         AllocSize:     0x%08lx\n",
-			ring->loc.size);
-	seq_printf(s, "         MmapCookie:    0x%08x\n",
-			ring->loc.cookie);
-	seq_printf(s, "Size:                   0x%x\n",
-			ring->num_ring_entries);
-	seq_printf(s, "ProdHdr:                %llx\n", (u64)
-			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_head);
-	seq_printf(s, "ProdTail:               %llx\n", (u64)
-			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].prod_tail);
-	seq_printf(s, "ConsHdr:                %llx\n", (u64)
-			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_head);
-	seq_printf(s, "ConsTail:               %llx\n", (u64)
-			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].cons_tail);
-	seq_printf(s, "RingBuf:                %llx\n", (u64)
-			ring->ring[FSM_DP_RING_NORMAL_PRIORITY].element);
-	if (ring->ring_type == FSM_DP_RING_TYPE_SINGLE)
-		return 0;
-	seq_printf(s, "High Priority:\n");
-	seq_printf(s, "    ProdHdr:            %llx\n", (u64)
-			ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_head);
-	seq_printf(s, "    ProdTail:           %llx\n", (u64)
-			ring->ring[FSM_DP_RING_HIGH_PRIORITY].prod_tail);
-	seq_printf(s, "    ConsHdr:            %llx\n", (u64)
-			ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_head);
-	seq_printf(s, "    ConsTail:           %llx\n", (u64)
-			ring->ring[FSM_DP_RING_HIGH_PRIORITY].cons_tail);
-	seq_printf(s, "    RingBuf:            %llx\n", (u64)
-			ring->ring[FSM_DP_RING_HIGH_PRIORITY].element);
+	seq_printf(s, "Ring %llx MemoryAlloc:\n", (u64) ring);
+	seq_printf(s, "         AllocAddr:     %llx\n", (u64) ring->loc.base);
+	seq_printf(s, "         AllocSize:     0x%08lx\n", ring->loc.size);
+	seq_printf(s, "         MmapCookie:    0x%08x\n", ring->loc.cookie);
+	seq_printf(s, "Size:                   0x%x\n", ring->size);
+	seq_printf(s, "ProdHdr:                %llx\n", (u64) ring->prod_head);
+	seq_printf(s, "ProdTail:               %llx\n", (u64) ring->prod_tail);
+	seq_printf(s, "ConsHdr:                %llx\n", (u64) ring->cons_head);
+	seq_printf(s, "ConsTail:               %llx\n", (u64) ring->cons_tail);
+	seq_printf(s, "RingBuf:                %llx\n", (u64) ring->element);
 	return 0;
 }
 
@@ -514,7 +468,7 @@ static ssize_t debugfs_ring_index_write(
 	if (kstrtouint_from_user(buf, count, 0, &value))
 		return -EFAULT;
 
-	if (value >= mempool->ring.num_ring_entries)
+	if (value >= mempool->ring.size)
 		return -EINVAL;
 
 	__ring_index[mempool->type] = value;
@@ -532,10 +486,7 @@ static int debugfs_ring_data_read(struct seq_file *s, void *unused)
 	if (mempool) {
 		fsm_dp_ring_element_t *elem_p;
 
-		elem_p =
-			(mempool->ring.ring
-				[FSM_DP_RING_NORMAL_PRIORITY].element
-					+ __ring_index[mempool->type]);
+		elem_p = (mempool->ring.element + __ring_index[mempool->type]);
 
 		seq_printf(s, "0x%lx\n", elem_p->element_data);
 	}
@@ -622,290 +573,6 @@ static int debugfs_mempool_state_show(struct seq_file *s, void *unused)
 }
 DEFINE_DEBUGFS_OPS(debugfs_mempool_state, debugfs_mempool_state_show, NULL);
 
-static unsigned long calc_ts_diff_us(struct timespec *end, struct timespec *start)
-{
-	unsigned long diff = 0;
-
-	diff = (end->tv_sec - start->tv_sec) * 1000000000;
-	diff = (diff + end->tv_nsec) - start->tv_nsec;
-	return diff / 1000;
-}
-
-void fsm_dp_register_dl_traffic(struct fsm_dp_mempool *mempool,
-					struct fsm_dp_buf_cntrl *pf)
-{
-	unsigned long diff;
-	unsigned int cur;
-	unsigned int prev;
-
-	if (mempool->pf_enable < 1)
-		return;
-	if (!pf->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX].tv_sec ||
-		!pf->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX].tv_sec)
-		return;
-	mempool->dl_traffic_profiling.frame_count++;
-	memcpy(&mempool->dl_traffic_profiling.
-		entry[mempool->dl_traffic_profiling.next], &pf->ts[0],
-		sizeof(struct traffic_profiling_entry));
-	cur = mempool->dl_traffic_profiling.next;
-	mempool->dl_traffic_profiling.next++;
-	if (mempool->dl_traffic_profiling.next  >= NUM_DL_PROFILING) {
-		mempool->dl_traffic_profiling.wrap = true;
-		mempool->dl_traffic_profiling.next = 0;
-	}
-
-	diff = calc_ts_diff_us(
-		&mempool->dl_traffic_profiling.entry[cur]
-				.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX],
-		&mempool->dl_traffic_profiling.entry[cur]
-				.ts[FSM_DP_DL_APPL_SEND_REQ_INDEX]);
-	if (diff > mempool->dl_traffic_profiling.max_dma_req)
-		mempool->dl_traffic_profiling.max_dma_req = diff;
-	if (diff < mempool->dl_traffic_profiling.min_dma_req)
-		mempool->dl_traffic_profiling.min_dma_req = diff;
-	mempool->dl_traffic_profiling.avg_dma_req += diff;
-
-	diff = calc_ts_diff_us(
-		&mempool->dl_traffic_profiling.entry[cur]
-				.ts[FSM_DP_DL_SEND_DMA_COMP_INDEX],
-		&mempool->dl_traffic_profiling.entry[cur]
-				.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX]);
-
-	if (diff > (mempool->dl_max_dma_cmplt_time * MILISEC))
-		FSM_DP_WARN_RATELIMITED(
-			"%s: tx DMA taking %ld micro second to complete\n",
-                          __func__, diff);
-	if (diff > mempool->dl_traffic_profiling.max_dma_cmp)
-		mempool->dl_traffic_profiling.max_dma_cmp = diff;
-	if (diff < mempool->dl_traffic_profiling.min_dma_cmp)
-		mempool->dl_traffic_profiling.min_dma_cmp = diff;
-	mempool->dl_traffic_profiling.avg_dma_cmp += diff;
-
-	if (mempool->dl_traffic_profiling.frame_count == 1)
-		return;
-	if (cur == 0)
-		prev = NUM_DL_PROFILING - 1;
-	else
-		prev = cur - 1;
-
-	diff = calc_ts_diff_us(
-		&mempool->dl_traffic_profiling.
-			entry[cur].ts[FSM_DP_DL_APPL_SEND_REQ_INDEX],
-		&mempool->dl_traffic_profiling.
-			entry[prev].ts[FSM_DP_DL_APPL_SEND_REQ_INDEX]);
-
-	if (mempool->dl_ifg_threshold && diff > mempool->dl_ifg_threshold * MILISEC)
-		FSM_DP_WARN_RATELIMITED(
-			"%s: tx interfame gap %ld micro second exceeds"
-			" threshold of %d micro second\n",
-                          __func__, diff, mempool->dl_ifg_threshold * MILISEC);
-
-	if (diff > mempool->dl_traffic_profiling.max_frame_gap)
-		mempool->dl_traffic_profiling.max_frame_gap = diff;
-	if (diff < mempool->dl_traffic_profiling.min_frame_gap)
-		mempool->dl_traffic_profiling.min_frame_gap = diff;
-	mempool->dl_traffic_profiling.avg_frame_gap += diff;
-}
-
-static int debugfs_mempool_DL_traffic_pf_show(struct seq_file *s, void *unused)
-{
-	struct fsm_dp_mempool *mempool =
-		*((struct fsm_dp_mempool **)s->private);
-	unsigned int start, iter, count = 0;
-	unsigned long diff;
-
-	if (!mempool || mempool->pf_enable < 1 ||
-			!mempool->dl_traffic_profiling.frame_count)
-		return 0;
-
-	seq_printf(s, "Max transfer request time %ld us,"
-		" Min transfer request time %ld us, ",
-		mempool->dl_traffic_profiling.max_dma_req,
-		mempool->dl_traffic_profiling.min_dma_req);
-	seq_printf(s, " Avergage transfer request time %ld.%-3ld us\n",
-		 mempool->dl_traffic_profiling.avg_dma_req /
-			mempool->dl_traffic_profiling.frame_count,
-		(mempool->dl_traffic_profiling.avg_dma_req %
-			mempool->dl_traffic_profiling.frame_count) * 100 /
-			mempool->dl_traffic_profiling.frame_count);
-	seq_printf(s, "Max transfer complete time %ld us,"
-		" Min transfer complete time %ld us,",
-		mempool->dl_traffic_profiling.max_dma_cmp,
-		mempool->dl_traffic_profiling.min_dma_cmp);
-	seq_printf(s, " Avergage transfer complete time %ld.%-3ld us\n",
-		mempool->dl_traffic_profiling.avg_dma_cmp /
-			mempool->dl_traffic_profiling.frame_count,
-		(mempool->dl_traffic_profiling.avg_dma_cmp %
-			mempool->dl_traffic_profiling.frame_count) * 100 /
-			mempool->dl_traffic_profiling.frame_count);
-	if (mempool->dl_traffic_profiling.frame_count > 1) {
-		seq_printf(s, "Max inter frame gap time %ld us,"
-			" Min inter frame gap time %ld us, ",
-			mempool->dl_traffic_profiling.max_frame_gap,
-			mempool->dl_traffic_profiling.min_frame_gap);
-		seq_printf(s,
-			" Avergage inter frame gap time %ld.%-3ld us\n",
-			mempool->dl_traffic_profiling.avg_frame_gap /
-				mempool->dl_traffic_profiling.frame_count - 1,
-			(mempool->dl_traffic_profiling.avg_frame_gap %
-				mempool->dl_traffic_profiling.frame_count - 1)
-					* 100 /
-				mempool->dl_traffic_profiling.frame_count - 1);
-	}
-	if (mempool->pf_enable ==  1)
-		return 0;
-	if (!mempool->dl_traffic_profiling.wrap)
-		start = 0;
-	else
-		start = mempool->dl_traffic_profiling.next;
-	for (iter  = start;;) {
-		struct traffic_profiling_entry *p;
-		struct timespec prev;
-		struct  timespec *pp = NULL;
-
-		p = &mempool->dl_traffic_profiling.entry[iter];
-		if (pp)
-			diff = calc_ts_diff_us(
-					&p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX],
-					pp);
-		seq_printf(s,	"Req %dth entry: "
-				"Apps Transfer Req time %ld.%ld,"
-				"Kernel Transfer Req time %ld.%ld,"
-				"Transfer Cmp time %ld.%ld, ", count,
-			p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX].tv_sec,
-			p->ts[FSM_DP_DL_APPL_SEND_REQ_INDEX].tv_nsec,
-			p->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX].tv_sec,
-			p->ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX].tv_nsec,
-			p->ts[FSM_DP_DL_SEND_DMA_COMP_INDEX].tv_sec,
-			p->ts[FSM_DP_DL_SEND_DMA_COMP_INDEX].tv_nsec);
-		if (pp)
-			seq_printf(s, "Inter Frame Gap %ldus\n", diff);
-		else
-			seq_printf(s, "\n");
-		prev = mempool->dl_traffic_profiling.entry[iter]
-				.ts[FSM_DP_DL_APPL_SEND_REQ_INDEX];
-		pp = &prev;
-		iter++;
-		if (!mempool->dl_traffic_profiling.wrap) {
-			if (iter == mempool->dl_traffic_profiling.frame_count)
-				break;
-		} else if (iter == NUM_DL_PROFILING)
-			iter = 0;
-		count++;
-		if (iter == start)
-			break;
-	}
-	return 0;
-}
-DEFINE_DEBUGFS_OPS(debugfs_mempool_DL_traffic_pf,
-		debugfs_mempool_DL_traffic_pf_show, NULL);
-
-static int debugfs_mempool_traffic_pf_enable_read(struct seq_file *s,
-	void *unused)
-{
-	struct fsm_dp_mempool *mempool =
-		*((struct fsm_dp_mempool **)s->private);
-
-	if (mempool)
-		seq_printf(s, "%s\n", (mempool->pf_enable) ? "enable" : "disable");
-	return 0;
-}
-
-static ssize_t debugfs_mempool_traffic_pf_enable_write(
-	struct file *fp,
-	const char __user *buf,
-	size_t count,
-	loff_t *ppos)
-{
-	struct fsm_dp_mempool *mempool = *((struct fsm_dp_mempool **)
-			(((struct seq_file *)fp->private_data)->private));
-	unsigned int value = 0;
-
-	if (!mempool)
-		return -EINVAL;
-
-	if (kstrtouint_from_user(buf, count, 0, &value))
-		return -EFAULT;
-	mempool->pf_enable = value;
-	mempool_traffic_pf_reset(mempool);
-	return count;
-}
-
-DEFINE_DEBUGFS_OPS(debugfs_mempool_traffic_pf_enable,
-	debugfs_mempool_traffic_pf_enable_read,
-	debugfs_mempool_traffic_pf_enable_write);
-
-static int debugfs_mempool_DL_ifg_threshold_read(struct seq_file *s,
-	void *unused)
-{
-	struct fsm_dp_mempool *mempool =
-		*((struct fsm_dp_mempool **)s->private);
-
-	if (mempool)
-		seq_printf(s, "DL Inter Frame Gap Threshold %d mili second\n",
-			mempool->dl_ifg_threshold);
-	return 0;
-}
-
-static ssize_t debugfs_mempool_DL_ifg_threshold_write(
-	struct file *fp,
-	const char __user *buf,
-	size_t count,
-	loff_t *ppos)
-{
-	struct fsm_dp_mempool *mempool = *((struct fsm_dp_mempool **)
-			(((struct seq_file *)fp->private_data)->private));
-	unsigned int value = 0;
-
-	if (!mempool)
-		return -EINVAL;
-
-	if (kstrtouint_from_user(buf, count, 0, &value))
-		return -EFAULT;
-	mempool->dl_ifg_threshold = value;
-	return count;
-}
-
-DEFINE_DEBUGFS_OPS(debugfs_mempool_DL_ifg_threshold,
-	debugfs_mempool_DL_ifg_threshold_read,
-	debugfs_mempool_DL_ifg_threshold_write);
-
-static int debugfs_mempool_DL_max_dma_read(struct seq_file *s,
-	void *unused)
-{
-	struct fsm_dp_mempool *mempool =
-		*((struct fsm_dp_mempool **)s->private);
-
-	if (mempool)
-		seq_printf(s, "DL Max DMA Complete Time: %d mili second\n",
-			mempool->dl_max_dma_cmplt_time);
-	return 0;
-}
-
-static ssize_t debugfs_mempool_DL_max_dma_write(
-	struct file *fp,
-	const char __user *buf,
-	size_t count,
-	loff_t *ppos)
-{
-	struct fsm_dp_mempool *mempool = *((struct fsm_dp_mempool **)
-			(((struct seq_file *)fp->private_data)->private));
-	unsigned int value = 0;
-
-	if (!mempool)
-		return -EINVAL;
-
-	if (kstrtouint_from_user(buf, count, 0, &value))
-		return -EFAULT;
-	mempool->dl_max_dma_cmplt_time = value;
-	return count;
-}
-
-DEFINE_DEBUGFS_OPS(debugfs_mempool_DL_max_dma,
-	debugfs_mempool_DL_max_dma_read,
-	debugfs_mempool_DL_max_dma_write);
-
-
 static int debugfs_mempool_active_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
@@ -943,44 +610,24 @@ static int debugfs_mhi_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
 	struct fsm_dp_mhi *mhi = &drv->mhi;
-	int i;
 
-	for (i = 0; i < 2; i++) {
-		if (IS_ERR_OR_NULL(mhi))
-			goto next;
-		else
-			seq_printf(s, "MHIDevice: %s ,",
-					(mhi->llc ? "IP_HW_LLC" : "IP_HW0"));
-		if (mhi->mhi_destroyed)
-			seq_printf(s, " OFF\n");
-		else
-			seq_printf(s, " ON\n");
-		seq_puts(s, "  Stats:\n");
-		seq_printf(s, "    TX:                 %lu\n",
-						mhi->stats.tx_cnt);
-		seq_printf(s, "    TX_ACKED:           %lu\n",
-						mhi->stats.tx_acked);
-		seq_printf(s, "    TX_ERR:             %lu\n",
-						mhi->stats.tx_err);
-		seq_printf(s, "    RX:                 %lu\n",
-						mhi->stats.rx_cnt);
-		seq_printf(s, "    RX_ERR:             %lu\n",
-						mhi->stats.rx_err);
-		seq_printf(s, "    RX_OUT_OF_BUF:      %lu\n",
-			mhi->stats.rx_out_of_buf);
-		seq_printf(s, "    RX_REPLENISH:       %lu\n",
-			mhi->stats.rx_replenish);
-		seq_printf(s, "    RX_REPLENISH_ERR:   %lu\n",
-			mhi->stats.rx_replenish_err);
-		seq_printf(s, "    RX_OUTOFBUF_DROP:   %lu\n",
-			mhi->stats.rx_outofbuf_drop);
-		seq_printf(s, "    RX_OUTOFBUF_RESYNC: %lu\n",
-			mhi->stats.rx_resync);
-next:
-		if (i == 0)
-			mhi = &drv->mhi_llc;
-	}
-
+	seq_printf(s, "MHIDevice:              %llx\n", (u64) mhi->mhi_dev);
+	seq_puts(s, "Stats:\n");
+	seq_printf(s, "    TX:                 %lu\n", mhi->stats.tx_cnt);
+	seq_printf(s, "    TX_ACKED:           %lu\n", mhi->stats.tx_acked);
+	seq_printf(s, "    TX_ERR:             %lu\n", mhi->stats.tx_err);
+	seq_printf(s, "    RX:                 %lu\n", mhi->stats.rx_cnt);
+	seq_printf(s, "    RX_ERR:             %lu\n", mhi->stats.rx_err);
+	seq_printf(s, "    RX_OUT_OF_BUF:      %lu\n",
+		   mhi->stats.rx_out_of_buf);
+	seq_printf(s, "    RX_REPLENISH:       %lu\n",
+		   mhi->stats.rx_replenish);
+	seq_printf(s, "    RX_REPLENISH_ERR:   %lu\n",
+		   mhi->stats.rx_replenish_err);
+	seq_printf(s, "    RX_OUTOFBUF_DROP:   %lu\n",
+		   mhi->stats.rx_outofbuf_drop);
+	seq_printf(s, "    RX_OUTOFBUF_RESYNC: %lu\n",
+		   mhi->stats.rx_resync);
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_mhi, debugfs_mhi_show, NULL);
@@ -1022,7 +669,12 @@ static int debugfs_drv_status_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
 	struct fsm_dp_core_stats *stats = &drv->stats;
+	struct fsm_dp_mhi *mhi = &drv->mhi;
 
+	if (mhi->mhi_dev && !mhi->mhi_destroyed)
+		seq_printf(s, "MHIDevice: ON\n");
+	else
+		seq_printf(s, "MHIDevice: OFF\n");
 	seq_printf(s, "TX:             %lu\n", stats->tx_cnt);
 	seq_printf(s, "TX_ERR:         %lu\n", stats->tx_err);
 	seq_printf(s, "RX:             %lu\n", stats->rx_cnt);
@@ -1034,53 +686,6 @@ static int debugfs_drv_status_show(struct seq_file *s, void *unused)
 }
 DEFINE_DEBUGFS_OPS(debugfs_drv_status, debugfs_drv_status_show, NULL);
 
-static char *debugfs_log_level_to_text(enum fsm_dp_log_level log_level)
-{
-
-	switch (log_level) {
-	case FSM_DP_LOG_LEVEL_DEBUG:
-		return "FSM_DP_LOG_LEVEL_DEBUG";
-	case FSM_DP_LOG_LEVEL_INFO:
-		return "FSM_DP_LOG_LEVEL_INFO";
-	case FSM_DP_LOG_LEVEL_WARN:
-		return "FSM_DP_LOG_LEVEL_WARN";
-	case FSM_DP_LOG_LEVEL_ERROR:
-		return "FSM_DP_LOG_LEVEL_ERROR";
-	case FSM_DP_LOG_LEVEL_DISABLE:
-	default:
-		return "FSM_DP_LOG_LEVEL_DISABLE";
-	}
-	return "FSM_DP_LOG_LEVEL_DISABLE";
-}
-
-static ssize_t debugfs_log_level_write(
-	struct file *fp,
-	const char __user *buf,
-	size_t count,
-	loff_t *ppos)
-{
-	unsigned int value = 0;
-
-	if (kstrtouint_from_user(buf, count, 0, &value))
-		return -EFAULT;
-
-	if (value <=  FSM_DP_LOG_LEVEL_ERROR)
-		fsm_dp_log_level =  value;
-	else
-		fsm_dp_log_level = FSM_DP_LOG_LEVEL_DISABLE;
-	return count;
-}
-
-static int debugfs_log_level_show(struct seq_file *s, void *unused)
-{
-	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
-
-	seq_printf(s, "%s\n",
-		debugfs_log_level_to_text(fsm_dp_log_level));
-	return 0;
-}
-DEFINE_DEBUGFS_OPS(debugfs_log_level, debugfs_log_level_show,
-					debugfs_log_level_write);
 static int debugfs_drv_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
@@ -1091,6 +696,285 @@ static int debugfs_drv_show(struct seq_file *s, void *unused)
 	return 0;
 }
 DEFINE_DEBUGFS_OPS(debugfs_drv, debugfs_drv_show, NULL);
+
+
+static int debugfs_traffic_status_show(struct seq_file *s, void *unused)
+{
+	struct fsm_dp_traffic *traffic = (struct fsm_dp_traffic *)s->private;
+
+	if (!traffic->traffic_timestamp)
+		return 0;
+	if (traffic->ul_cnt)
+		seq_printf(s, "Avg FSM-DP UL ns    %6llu\n",
+			traffic->ul_ktime / traffic->ul_cnt);
+	if (traffic->dl_cnt)
+		seq_printf(s, "Avg FSM-DP DL ns    %6llu\n",
+			traffic->dl_ktime / traffic->dl_cnt);
+	return 0;
+}
+
+DEFINE_DEBUGFS_OPS(debugfs_traffic_status, debugfs_traffic_status_show, NULL);
+
+static int debugfs_traffic_timestamp_get(struct seq_file *s, void *unused)
+{
+	struct fsm_dp_traffic *traffic = (struct fsm_dp_traffic *)s->private;
+
+	seq_printf(s, "timestamp    %d\n", traffic->traffic_timestamp);
+	return 0;
+}
+
+static ssize_t debugfs_traffic_timestamp_set(
+	struct file *fp,
+	const char __user *buf,
+	size_t count,
+	loff_t *ppos)
+{
+	struct fsm_dp_traffic *traffic = (struct fsm_dp_traffic *)
+			(((struct seq_file *)fp->private_data)->private);
+	unsigned int enable = 0;
+
+	if (kstrtouint_from_user(buf, count, 0, &enable))
+		return -EFAULT;
+	traffic->traffic_timestamp = enable;
+	if (enable) {
+		traffic->dl_ktime = 0;
+		traffic->ul_ktime = 0;
+		traffic->dl_cnt = 0;
+		traffic->ul_cnt = 0;
+	}
+	return count;
+}
+
+DEFINE_DEBUGFS_OPS(
+	debugfs_traffic_timestamp,
+	debugfs_traffic_timestamp_get,
+	debugfs_traffic_timestamp_set);
+
+static unsigned long fsm_dp_gap_array[FSM_DP_TRAFFIC_ARRAY_SIZE];
+static int debugfs_traffic_ul_get(struct seq_file *s, void *unused)
+{
+	struct fsm_dp_traffic *traffic = (struct fsm_dp_traffic *)s->private;
+	unsigned long max_gap = 0;
+	unsigned long min_gap = 0xffffffff;
+	unsigned long total_gap = 0;
+	unsigned long gap;
+
+	ktime_t max_service = 0;
+	ktime_t min_service = 0xffffffff;
+	ktime_t total_service = 0;
+	ktime_t service;
+	int i;
+	unsigned int dist[5];
+
+	seq_printf(s, "UL collect done:       %d\n\n",
+					traffic->ul_traffic_collect_done);
+	if (!traffic->ul_traffic_collect_done)
+		return 0;
+
+	for (i = 0; i < FSM_DP_TRAFFIC_ARRAY_SIZE; i++) {
+
+		service = traffic->ul_traffic[i].complete_ktime -
+				traffic->ul_traffic[i].arrival_ktime;
+
+
+		if (service >= max_service)
+			max_service = service;
+		if (service <= min_service)
+			min_service = service;
+		total_service += service;
+	}
+	seq_printf(s, "UL max sericve time:  %lld ns\n", max_service);
+	seq_printf(s, "UL min service time: %lld ns\n", min_service);
+	seq_printf(s, "UL avg service time: %lld ns\n",
+				total_service / FSM_DP_TRAFFIC_ARRAY_SIZE);
+
+	dist[0] = dist[1] = dist[2] = dist[3] = dist[4] = 0;
+	for (i = 1; i < FSM_DP_TRAFFIC_ARRAY_SIZE; i++) {
+		gap = traffic->ul_traffic[i].arrival_ktime -
+			traffic->ul_traffic[i - 1].arrival_ktime;
+		fsm_dp_gap_array[i - 1] = gap / 1000;
+		if (gap >= max_gap)
+			max_gap = gap;
+		if (gap <= min_gap)
+			min_gap = gap;
+		total_gap += gap;
+		if (gap  >= 1000000)
+			dist[4]++;
+		else if (gap < 100000)
+			dist[0]++;
+		else if (gap < 200000)
+			dist[1]++;
+		else if (gap  < 500000)
+			dist[2]++;
+		else
+			dist[3]++;
+	}
+	seq_printf(s, "UL max gap:       %ld us\n",
+						max_gap / 1000);
+	seq_printf(s, "UL min gap:       %ld us\n",
+						min_gap / 1000);
+	seq_printf(s, "UL avg gap:       %ld us\n",
+				total_gap / (1000 *
+					(FSM_DP_TRAFFIC_ARRAY_SIZE - 1)));
+
+	seq_printf(s, "UL dist: < 100 us %d , < 200 us %d, < 500 us %d, < 1000 us %d, > 1000 us %d\n",
+			dist[0], dist[1], dist[2], dist[3], dist[4]);
+
+	for (i = 0; i < (FSM_DP_TRAFFIC_ARRAY_SIZE / 8) - 1; i++) {
+		pr_info("UL gap in us: %ld %ld %ld %ld %ld %ld %ld %ld\n",
+			fsm_dp_gap_array[i * 8], fsm_dp_gap_array[i * 8 + 1],
+			fsm_dp_gap_array[i * 8 + 2], fsm_dp_gap_array[i * 8 + 3],
+			fsm_dp_gap_array[i * 8 + 4], fsm_dp_gap_array[i * 8 + 5],
+			fsm_dp_gap_array[i * 8 + 6], fsm_dp_gap_array[i * 8 + 7]);
+	}
+	i = (FSM_DP_TRAFFIC_ARRAY_SIZE / 8) - 1;
+	pr_info("UL gap in us: %ld %ld %ld %ld %ld %ld %ld\n",
+			fsm_dp_gap_array[i * 8], fsm_dp_gap_array[i * 8 + 1],
+			fsm_dp_gap_array[i * 8 + 2], fsm_dp_gap_array[i * 8 + 3],
+			fsm_dp_gap_array[i * 8 + 4], fsm_dp_gap_array[i * 8 + 5],
+			fsm_dp_gap_array[i * 8 + 6]);
+	return 0;
+}
+
+static ssize_t debugfs_traffic_ul_set(
+	struct file *fp,
+	const char __user *buf,
+	size_t count,
+	loff_t *ppos)
+{
+	struct fsm_dp_traffic *traffic = (struct fsm_dp_traffic *)
+			(((struct seq_file *)fp->private_data)->private);
+	unsigned int enable = 0;
+
+	if (kstrtouint_from_user(buf, count, 0, &enable))
+		return -EFAULT;
+	if (enable && traffic->traffic_timestamp) {
+		traffic->ul_traffic_index = -1;
+		traffic->ul_traffic_collect_done = false;
+		traffic->ul_traffic_collect = true;
+	} else {
+		traffic->ul_traffic_collect = false;
+	}
+	return count;
+}
+
+DEFINE_DEBUGFS_OPS(
+	debugfs_traffic_ul,
+	debugfs_traffic_ul_get,
+	debugfs_traffic_ul_set);
+
+static int debugfs_traffic_dl_get(struct seq_file *s, void *unused)
+{
+	struct fsm_dp_traffic *traffic = (struct fsm_dp_traffic *)s->private;
+	unsigned long max_gap = 0;
+	unsigned long min_gap = 0xffffffff;
+	unsigned long total_gap = 0;
+	unsigned long gap;
+
+	ktime_t max_service = 0;
+	ktime_t min_service = 0xffffffff;
+	ktime_t total_service = 0;
+	ktime_t service;
+	int i;
+	unsigned int dist[5];
+
+	seq_printf(s, "DL collect done:       %d\n\n",
+					traffic->dl_traffic_collect_done);
+	if (!traffic->dl_traffic_collect_done)
+		return 0;
+
+	for (i = 0; i < FSM_DP_TRAFFIC_ARRAY_SIZE; i++) {
+		service = traffic->dl_traffic[i].complete_ktime -
+				traffic->dl_traffic[i].arrival_ktime;
+
+		if (service >= max_service)
+			max_service = service;
+		if (service <= min_service)
+			min_service = service;
+		total_service += service;
+	}
+	seq_printf(s, "DL max sericve time:  %lld us\n",
+					max_service  / 1000);
+	seq_printf(s, "DL min service time: %lld us\n",
+					min_service  / 1000);
+	seq_printf(s, "DL avg service time: %lld us\n",
+				total_service / (1000 *
+					FSM_DP_TRAFFIC_ARRAY_SIZE));
+
+	dist[0] = dist[1] = dist[2] = dist[3] = dist[4] = 0;
+	for (i = 1; i < FSM_DP_TRAFFIC_ARRAY_SIZE; i++) {
+		gap = traffic->dl_traffic[i].arrival_ktime -
+			traffic->dl_traffic[i - 1].arrival_ktime;
+		fsm_dp_gap_array[i - 1] = gap / 1000;
+		if (gap >= max_gap)
+			max_gap = gap;
+		if (gap <= min_gap)
+			min_gap = gap;
+		total_gap += gap;
+		if (gap  >= 1000000)
+			dist[4]++;
+		else if (gap < 100000)
+			dist[0]++;
+		else if (gap < 200000)
+			dist[1]++;
+		else if (gap  < 500000)
+			dist[2]++;
+		else
+			dist[3]++;
+	}
+	seq_printf(s, "DL max gap:       %ld us\n",
+						max_gap / 1000);
+	seq_printf(s, "DL min gap:       %ld us\n",
+						min_gap / 1000);
+	seq_printf(s, "DL avg gap:       %ld us\n",
+				total_gap / (1000 *
+					(FSM_DP_TRAFFIC_ARRAY_SIZE - 1)));
+
+	seq_printf(s, "UL dist: < 100 us %d , < 200 us %d, < 500 us %d, < 1000 us %d, > 1000 us %d\n",
+			dist[0], dist[1], dist[2], dist[3], dist[4]);
+
+	for (i = 0; i < (FSM_DP_TRAFFIC_ARRAY_SIZE / 8) - 1; i++) {
+		pr_info("DL gap in us: %ld %ld %ld %ld %ld %ld %ld %ld\n",
+			fsm_dp_gap_array[i * 8], fsm_dp_gap_array[i * 8 + 1],
+			fsm_dp_gap_array[i * 8 + 2], fsm_dp_gap_array[i * 8 + 3],
+			fsm_dp_gap_array[i * 8 + 4], fsm_dp_gap_array[i * 8 + 5],
+			fsm_dp_gap_array[i * 8 + 6], fsm_dp_gap_array[i * 8 + 7]);
+	}
+	i = (FSM_DP_TRAFFIC_ARRAY_SIZE / 8) - 1;
+	pr_info("DL gap in us: %ld %ld %ld %ld %ld %ld %ld\n",
+			fsm_dp_gap_array[i * 8], fsm_dp_gap_array[i * 8 + 1],
+			fsm_dp_gap_array[i * 8 + 2], fsm_dp_gap_array[i * 8 + 3],
+			fsm_dp_gap_array[i * 8 + 4], fsm_dp_gap_array[i * 8 + 5],
+			fsm_dp_gap_array[i * 8 + 6]);
+	return 0;
+}
+
+static ssize_t debugfs_traffic_dl_set(
+	struct file *fp,
+	const char __user *buf,
+	size_t count,
+	loff_t *ppos)
+{
+	struct fsm_dp_traffic *traffic = (struct fsm_dp_traffic *)
+			(((struct seq_file *)fp->private_data)->private);
+	unsigned int enable = 0;
+
+	if (kstrtouint_from_user(buf, count, 0, &enable))
+		return -EFAULT;
+	if (enable && traffic->traffic_timestamp) {
+		traffic->dl_traffic_index = -1;
+		traffic->dl_traffic_collect_done = false;
+		traffic->dl_traffic_collect = true;
+	} else {
+		traffic->dl_traffic_collect = false;
+	}
+	return count;
+}
+
+DEFINE_DEBUGFS_OPS(
+	debugfs_traffic_dl,
+	debugfs_traffic_dl_get,
+	debugfs_traffic_dl_set);
 
 static int debugfs_create_loopback_dir(struct dentry *parent,
 				       struct fsm_dp_drv *drv)
@@ -1104,6 +988,41 @@ static int debugfs_create_loopback_dir(struct dentry *parent,
 	entry = debugfs_create_file("status", 0444, dentry,
 				    &drv->loopback,
 				    &debugfs_loopback_ops);
+	if (!entry)
+		return -ENOMEM;
+	return 0;
+}
+
+static int debugfs_create_traffic_dir(struct dentry *parent,
+				       struct fsm_dp_drv *drv)
+{
+	struct dentry *entry = NULL, *dentry = NULL;
+
+	dentry = debugfs_create_dir("traffic", parent);
+	if (IS_ERR(dentry))
+		return -ENOMEM;
+
+	entry = debugfs_create_file("time_stamp", 0444, dentry,
+				    &drv->traffic,
+				    &debugfs_traffic_timestamp_ops);
+	if (!entry)
+		return -ENOMEM;
+
+	entry = debugfs_create_file("dl", 0444, dentry,
+				    &drv->traffic,
+				    &debugfs_traffic_dl_ops);
+	if (!entry)
+		return -ENOMEM;
+
+	entry = debugfs_create_file("ul", 0444, dentry,
+				    &drv->traffic,
+				    &debugfs_traffic_ul_ops);
+	if (!entry)
+		return -ENOMEM;
+
+	entry = debugfs_create_file("status", 0444, dentry,
+				    &drv->traffic,
+				    &debugfs_traffic_status_ops);
 	if (!entry)
 		return -ENOMEM;
 	return 0;
@@ -1278,39 +1197,17 @@ static int debugfs_create_mempool_dir(
 					    &debugfs_mempool_state_ops);
 		if (!entry)
 			return -ENOMEM;
-
-		entry = debugfs_create_file("traffic_profiling_enable_level", 0444,
-				dentry,
-				&drv->mempool[type],
-				&debugfs_mempool_traffic_pf_enable_ops);
-		if (!entry)
-			return -ENOMEM;
-		if (type != FSM_DP_MEM_TYPE_UL) {
-			entry = debugfs_create_file("DL_traffic_profiling",
-				0444, dentry, &drv->mempool[type],
-				&debugfs_mempool_DL_traffic_pf_ops);
-			if (!entry)
-				return -ENOMEM;
-
-			entry = debugfs_create_file("DL_inter_frame_gap_threshold",
-				0444, dentry, &drv->mempool[type],
-				&debugfs_mempool_DL_ifg_threshold_ops);
-			if (!entry)
-				return -ENOMEM;
-
-			entry = debugfs_create_file("DL_max_dma_req",
-				0444, dentry, &drv->mempool[type],
-				&debugfs_mempool_DL_max_dma_ops);
-			if (!entry)
-				return -ENOMEM;
-		}
 	}
 	return 0;
 }
 
+/*pdrv pointing to an array of fsm_dp_drv. */
 int fsm_dp_debugfs_init(struct fsm_dp_drv *drv)
 {
 	struct dentry *entry = NULL;
+	struct dentry *dentry = NULL;
+	char string[10];
+	int i;
 
 	if (unlikely(drv == NULL))
 		return -EINVAL;
@@ -1322,45 +1219,51 @@ int fsm_dp_debugfs_init(struct fsm_dp_drv *drv)
 	if (IS_ERR(__dent))
 		return -ENOMEM;
 
+
 	entry = debugfs_create_file("driver", 0444, __dent, drv,
 				    &debugfs_drv_ops);
+
 	if (!entry)
 		goto err;
 
-	entry = debugfs_create_file("cdev", 0444, __dent, drv,
+
+	for (i = 0; i < MAX_FSM_DP_DEVICE; i++, drv++) {
+		snprintf(string, sizeof(string), "FSM-%d", i + 1);
+		dentry = debugfs_create_dir(string, __dent);
+		if (!dentry)
+			goto err;
+		entry = debugfs_create_file("cdev", 0444, dentry, drv,
 				    &debugfs_cdev_ops);
-	if (!entry)
-		goto err;
+		if (!entry)
+			goto err;
 
-	entry = debugfs_create_file("mhi", 0444, __dent, drv,
+		entry = debugfs_create_file("mhi", 0444, dentry, drv,
 				    &debugfs_mhi_ops);
-	if (!entry)
-		goto err;
+		if (!entry)
+			goto err;
 
-	entry = debugfs_create_file("status", 0444, __dent, drv,
+		entry = debugfs_create_file("status", 0444, dentry, drv,
 				    &debugfs_drv_status_ops);
-	if (!entry)
-		goto err;
+		if (!entry)
+			goto err;
 
-	entry = debugfs_create_file("log-level", 0444, __dent, drv,
-				    &debugfs_log_level_ops);
-	if (!entry)
-		goto err;
+		if (debugfs_create_mempool_dir(dentry, drv))
+			goto err;
 
-	if (debugfs_create_mempool_dir(__dent, drv))
-		goto err;
+		if (debugfs_create_rxq_dir(dentry, drv))
+			goto err;
 
-	if (debugfs_create_rxq_dir(__dent, drv))
-		goto err;
+		if (debugfs_create_loopback_dir(dentry, drv))
+			goto err;
 
-	if (debugfs_create_loopback_dir(__dent, drv))
-		goto err;
+		if (debugfs_create_traffic_dir(dentry, drv))
+			goto err;
 
 #ifdef CONFIG_FSM_DP_TEST
-	if (debugfs_create_testring_dir(__dent, drv))
-		goto err;
+		if (debugfs_create_testring_dir(dentry, drv))
+			goto err;
 #endif
-
+	}
 	return 0;
 err:
 	debugfs_remove_recursive(__dent);

@@ -1,4 +1,5 @@
 /* Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -56,7 +57,7 @@ static int mhi_dtr_tiocmset(struct mhi_controller *mhi_cntrl,
 
 	tiocm &= (TIOCM_DTR | TIOCM_RTS);
 
-	/* state did not changed */
+	/* state did not change */
 	if (cur_tiocm == tiocm)
 		return 0;
 
@@ -86,7 +87,7 @@ static int mhi_dtr_tiocmset(struct mhi_controller *mhi_cntrl,
 	ret = wait_for_completion_timeout(&dtr_chan->completion,
 				msecs_to_jiffies(mhi_cntrl->timeout_ms));
 	if (!ret) {
-		MHI_ERR("Failed to receive transfer callback\n");
+		MHI_ERR(mhi_cntrl, "Failed to receive transfer callback\n");
 		ret = -EIO;
 		goto tiocm_exit;
 	}
@@ -143,12 +144,12 @@ static void mhi_dtr_dl_xfer_cb(struct mhi_device *mhi_dev,
 	spinlock_t *res_lock;
 
 	if (mhi_result->bytes_xferd != sizeof(*dtr_msg)) {
-		MHI_ERR("Unexpected length %zu received\n",
+		MHI_ERR(mhi_cntrl, "Unexpected length %zu received\n",
 			mhi_result->bytes_xferd);
 		return;
 	}
 
-	MHI_VERB("preamble:0x%x msg_id:%u dest_id:%u msg:0x%x\n",
+	MHI_VERB(mhi_cntrl, "preamble:0x%x msg_id:%u dest_id:%u msg:0x%x\n",
 		 dtr_msg->preamble, dtr_msg->msg_id, dtr_msg->dest_id,
 		 dtr_msg->msg);
 
@@ -173,9 +174,6 @@ static void mhi_dtr_dl_xfer_cb(struct mhi_device *mhi_dev,
 	if (dtr_msg->msg & CTRL_MSG_RI)
 		mhi_dev->tiocm |= TIOCM_RI;
 	spin_unlock_irq(res_lock);
-
-	/* Notify the update */
-	mhi_notify(mhi_dev, MHI_CB_DTR_SIGNAL);
 }
 
 static void mhi_dtr_ul_xfer_cb(struct mhi_device *mhi_dev,
@@ -184,7 +182,7 @@ static void mhi_dtr_ul_xfer_cb(struct mhi_device *mhi_dev,
 	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
 	struct mhi_chan *dtr_chan = mhi_cntrl->dtr_dev->ul_chan;
 
-	MHI_VERB("Received with status:%d\n", mhi_result->transaction_status);
+	MHI_VERB(mhi_cntrl, "Received with status:%d\n", mhi_result->transaction_status);
 	if (!mhi_result->transaction_status)
 		complete(&dtr_chan->completion);
 }
@@ -202,13 +200,13 @@ static int mhi_dtr_probe(struct mhi_device *mhi_dev,
 	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
 	int ret;
 
-	MHI_LOG("Enter for DTR control channel\n");
+	MHI_LOG(mhi_cntrl, "Enter for DTR control channel\n");
 
 	ret = mhi_prepare_for_transfer(mhi_dev);
 	if (!ret)
 		mhi_cntrl->dtr_dev = mhi_dev;
 
-	MHI_LOG("Exit with ret:%d\n", ret);
+	MHI_LOG(mhi_cntrl, "Exit with ret:%d\n", ret);
 
 	return ret;
 }

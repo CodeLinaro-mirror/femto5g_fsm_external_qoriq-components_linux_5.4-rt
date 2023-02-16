@@ -3,6 +3,7 @@
 // Device Tree Include file for Layerscape-LX2160A family SoC.
 //
 // Copyright 2018-2020 NXP
+// Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -867,8 +868,7 @@
 			compatible = "snps,dwc3";
 			reg = <0x0 0x3110000 0x0 0x10000>;
 			interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
-			dr_mode = "peripheral";
-			maximum-speed = "super-speed";
+			dr_mode = "host";
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
@@ -1391,7 +1391,10 @@
 	};
 
 	tti {
-		gpios = <&gpio3 23 0>;
+		gpios = <
+			&gpio3 23 0 /* FSM 1 */
+			&gpio3 21 0 /* FSM 2 */
+			>;
 		assert-falling-edge;
 		compatible = "tti-gpio";
 		status = "okay";
@@ -1399,7 +1402,7 @@
 
 	qcom,fsm-dp {
 		compatible = "qcom,fsm-dp";
-		qcom,ul-bufs = <65280 8192>;
+		qcom,ul-bufs = <16320 4096>;
 		qcom,rx-queue-size = <1024 1024 1024 1024>;
 		dma-coherent;
 	};

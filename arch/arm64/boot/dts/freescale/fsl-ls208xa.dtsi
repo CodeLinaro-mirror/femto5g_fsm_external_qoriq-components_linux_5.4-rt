@@ -4,6 +4,7 @@
  *
  * Copyright 2016 Freescale Semiconductor, Inc.
  * Copyright 2017-2019 NXP
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Abhimanyu Saini <abhimanyu.saini@nxp.com>
  *
@@ -656,8 +657,7 @@
 			compatible = "snps,dwc3";
 			reg = <0x0 0x3110000 0x0 0x10000>;
 			interrupts = <0 81 0x4>; /* Level high type */
-			dr_mode = "peripheral";
-			maximum-speed = "super-speed";
+			dr_mode = "host";
 			snps,quirk-frame-length-adjustment = <0x20>;
 			snps,dis_rxdet_inp3_quirk;
 			snps,incr-burst-type-adjustment = <1>, <4>, <8>, <16>;
@@ -707,7 +707,10 @@
 	};
 
 	tti {
-		gpios = <&gpio3 17 0>;
+		gpios = <
+			&gpio3 17 0 /* FSM 1 */
+			&gpio3 18 0 /* FSM 2 */
+			>;
 		assert-falling-edge;
 		compatible = "tti-gpio";
 		status = "okay";
@@ -722,7 +725,7 @@
 
 	qcom,fsm-dp {
 		compatible = "qcom,fsm-dp";
-		qcom,ul-bufs = <65280 8192>;
+		qcom,ul-bufs = <16320 4096>;
 		qcom,rx-queue-size = <1024 1024 1024 1024>;
 		dma-coherent;
 	};

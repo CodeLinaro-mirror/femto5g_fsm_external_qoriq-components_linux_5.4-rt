@@ -35,9 +35,6 @@
 #include <linux/debugfs.h>
 #include "fsm_oru_fwd_imp.h"
 
-/* ipc logging */
-void *fsm_oru_fwd_ipc_log = NULL;
-
 static struct fsm_oru_fwdr *pfsm_forwarder;
 static unsigned int oru_fwd_etype = ECPRI_ETHER_TYPE;
 module_param(oru_fwd_etype, int, 0660);
@@ -368,14 +365,14 @@ static int debugfs_fwd_traffic_ul_get(struct seq_file *s, void *unused)
 			dist[0], dist[1], dist[2], dist[3], dist[4]);
 
 	for (i = 0; i < (FWD_TRAFFIC_ARRAY_SIZE / 8) - 1; i++) {
-		FSM_ORU_FWD_INFO("gap %ld %ld %ld %ld %ld %ld %ld %ld\n",
+		pr_info("gap %ld %ld %ld %ld %ld %ld %ld %ld\n",
 			fwd_gap_array[i * 8], fwd_gap_array[i * 8 + 1],
 			fwd_gap_array[i * 8 + 2], fwd_gap_array[i * 8 + 3],
 			fwd_gap_array[i * 8 + 4], fwd_gap_array[i * 8 + 5],
 			fwd_gap_array[i * 8 + 6], fwd_gap_array[i * 8 + 7]);
 	}
 	i = (FWD_TRAFFIC_ARRAY_SIZE / 8) - 1;
-	FSM_ORU_FWD_INFO("gap %ld %ld %ld %ld %ld %ld %ld\n",
+	pr_info("gap %ld %ld %ld %ld %ld %ld %ld\n",
 			fwd_gap_array[i * 8], fwd_gap_array[i * 8 + 1],
 			fwd_gap_array[i * 8 + 2], fwd_gap_array[i * 8 + 3],
 			fwd_gap_array[i * 8 + 4], fwd_gap_array[i * 8 + 5],
@@ -478,14 +475,14 @@ static int debugfs_fwd_traffic_dl_get(struct seq_file *s, void *unused)
 			dist[0], dist[1], dist[2], dist[3], dist[4]);
 
 	for (i = 0; i < (FWD_TRAFFIC_ARRAY_SIZE / 8) - 1; i++) {
-		FSM_ORU_FWD_INFO("DL gap %ld %ld %ld %ld %ld %ld %ld %ld\n",
+		pr_info("DL gap %ld %ld %ld %ld %ld %ld %ld %ld\n",
 			fwd_gap_array[i * 8], fwd_gap_array[i * 8 + 1],
 			fwd_gap_array[i * 8 + 2], fwd_gap_array[i * 8 + 3],
 			fwd_gap_array[i * 8 + 4], fwd_gap_array[i * 8 + 5],
 			fwd_gap_array[i * 8 + 6], fwd_gap_array[i * 8 + 7]);
 	}
 	i = (FWD_TRAFFIC_ARRAY_SIZE / 8) - 1;
-	FSM_ORU_FWD_INFO("DL gap %ld %ld %ld %ld %ld %ld %ld\n",
+	pr_info("DL gap %ld %ld %ld %ld %ld %ld %ld\n",
 			fwd_gap_array[i * 8], fwd_gap_array[i * 8 + 1],
 			fwd_gap_array[i * 8 + 2], fwd_gap_array[i * 8 + 3],
 			fwd_gap_array[i * 8 + 4], fwd_gap_array[i * 8 + 5],
@@ -863,7 +860,7 @@ static int fsm_oru_fwd_enable(void)
 
 	netdev = dev_get_by_name(&init_net, pfsm_forwarder->fwd_netdev_name);
 	if (!netdev) {
-		FSM_ORU_FWD_WARN("%s: can not get device %s\n", __func__,
+		pr_warn("%s: can not get device %s\n", __func__,
 					pfsm_forwarder->fwd_netdev_name);
 		return 0;
 	}
@@ -1158,7 +1155,7 @@ static void fsm_oru_flush_xmit_queue(unsigned int type)
 static int fsm_oru_fwd_disable(void)
 {
 	if (!pfsm_forwarder->fwd_enable) {
-		FSM_ORU_FWD_WARN("%s: end",  __func__);
+		pr_warn("%s: end",  __func__);
 		return 0;
 	}
 
@@ -1201,7 +1198,7 @@ static void fsm_oru_fwd_nl_set_cfg(
 	resp_fwd->crd = FSM_ORU_FWD_NETLINK_MSG_RETURNCODE;
 	netdev = dev_get_by_name(&init_net, fwd_header->fwd_config.dev);
 	if (!netdev) {
-		FSM_ORU_FWD_ERROR("%s: can not get device %s\n", __func__,
+		pr_err("%s: can not get device %s\n", __func__,
 					fwd_header->fwd_config.dev);
 		resp_fwd->return_code = FSM_ORU_FWD_CONFIG_ERR;
 		return;
@@ -1368,7 +1365,7 @@ void fsm_oru_fwd_netlink_msg_handler(struct sk_buff *skb)
 	if (!nlmsg_header->nlmsg_pid ||
 		(nlmsg_header->nlmsg_len < sizeof(struct nlmsghdr) +
 			sizeof(struct fsm_oru_fwd_nl_msg_s))) {
-		FSM_ORU_FWD_WARN("%s: ill-formed netlink msg\n", __func__);
+		pr_warn("%s: ill-formed netlink msg\n", __func__);
 		return;
 	}
 	return_pid = nlmsg_header->nlmsg_pid;
@@ -1377,7 +1374,7 @@ void fsm_oru_fwd_netlink_msg_handler(struct sk_buff *skb)
 				GFP_KERNEL);
 
 	if (!skb_response) {
-		FSM_ORU_FWD_ERROR("%s: Failed to allocate response buffer\n", __func__);
+		pr_err("%s: Failed to allocate response buffer\n", __func__);
 		return;
 	}
 
@@ -1539,7 +1536,7 @@ static int fsm_queue_tx_skb(struct sk_buff *skb)
 	ecpri_mlen = ntohs(ecpri_hdr->payload_size);
 	ecpri_plen =  ecpri_mlen + sizeof(*ecpri_hdr);
 	if (skb->len < ecpri_plen) {
-		FSM_ORU_FWD_ERROR("%s: ill formatted ecpri msg length %d, packet length %d\n",
+		pr_err("%s: ill formatted ecpri msg length %d, packet length %d\n",
 				__func__, ecpri_plen, skb->len);
 		return -1;
 	}
@@ -1958,7 +1955,7 @@ err_rel:
 	}
 	return rc;
 ill_format:
-	FSM_ORU_FWD_ERROR("%s: ill formatted fsm_dp msg length  %d\n",
+	pr_err("%s: ill formatted fsm_dp msg length  %d\n",
 						__func__, orig_length);
 err1_rel:
 	fsm_dp_rel_rx_buf(pfsm_forwarder->fsm_dp_rx_handle, orig_buf);
@@ -2141,14 +2138,14 @@ static int fsm_oru_fwd_netdev_init(void)
 		"ofwd", NET_NAME_PREDICTABLE,
 		oru_netdev_setup);
 	if (!oru_netdev) {
-		FSM_ORU_FWD_ERROR("%s: can not allocate oru netdev\n", __func__);
+		pr_err("%s: can not allocate oru netdev\n", __func__);
 		rtnl_unlock();
 		return -ENOMEM;
 	}
 	rtnl_unlock();
 	ret = register_netdev(oru_netdev);
 	if (ret) {
-		FSM_ORU_FWD_ERROR("%s: Network device registration failed\n",
+		pr_err("%s: Network device registration failed\n",
 							__func__);
 		free_netdev(oru_netdev);
 		oru_netdev = NULL;
@@ -2174,7 +2171,7 @@ static void fsm_oru_fwd_init_time_measurement(void)
 	cycle_start = get_cycles();
 	udelay(1000);
 	fwd_cycles_per_ms = get_cycles() - cycle_start;
-	FSM_ORU_FWD_INFO("cycle per ms %d, per get_cycles call %d, per ktime_get %d\n",
+	pr_info("cycle per ms %d, per get_cycles call %d, per ktime_get %d\n",
 		fwd_cycles_per_ms, fwd_cycles_per_call,
 		fwd_cycles_per_ktime_get);
 
@@ -2186,7 +2183,7 @@ static void fsm_oru_fwd_init_time_measurement(void)
 	ktime_get();
 	ns_per_ktime = ktime_get() - ktime_start;
 
-	FSM_ORU_FWD_INFO("ns per ktime_get %lld, per get_cycles %lld\n",
+	pr_info("ns per ktime_get %lld, per get_cycles %lld\n",
 		ns_per_ktime, ns_per_get_cycles);
 
 	pfsm_forwarder->fwd_dl_concat_uplane_min_delay_cycle = fwd_cycles_per_ms *
@@ -2203,9 +2200,8 @@ static void fsm_oru_fwd_exit(void)
 {
 	_fsm_oru_fwd_cleanup();
 	dev_remove_pack(&fsm_oru_fwd_pt);
-	FSM_ORU_FWD_INFO("ORU Forwarder removed. oru_fwd_etype=%x\n",
+	pr_info("ORU Forwarder removed. oru_fwd_etype=%x\n",
 							oru_fwd_etype);
-	fsm_disable_ipc_logging(&fsm_oru_fwd_ipc_log);
 }
 
 static enum hrtimer_restart fsm_oru_fwd_concat_utimer_handler(
@@ -2340,8 +2336,6 @@ static int fsm_oru_fwd_init(void)
 	int ret = 0;
 	struct workqueue_struct *wq;
 
-	fsm_enable_ipc_logging(&fsm_oru_fwd_ipc_log,
-		FSM_DEFAULT_IPC_LOG_PAGES, FSM_ORU_FWD_NAME);
 	pfsm_forwarder = kzalloc(sizeof(*pfsm_forwarder), GFP_KERNEL);
 	if (!pfsm_forwarder)
 		return -ENOMEM;
@@ -2353,7 +2347,7 @@ static int fsm_oru_fwd_init(void)
 
 	nl_socket_handle = _fsm_oru_fwd_start_netlink();
 	if (!nl_socket_handle) {
-		FSM_ORU_FWD_ERROR("%s: Failed to init netlink socket\n", __func__);
+		pr_err("%s: Failed to init netlink socket\n", __func__);
 		kfree(pfsm_forwarder);
 		return -ENOMEM;
 	}
@@ -2413,7 +2407,7 @@ static int fsm_oru_fwd_init(void)
 
 	ret = fsm_oru_fwd_debugfs_init();
 	if (!ret) {
-		FSM_ORU_FWD_INFO("ORU Forwarder loaded. dev %s oru_fwd_etype=%x\n",
+		pr_info("ORU Forwarder loaded. dev %s oru_fwd_etype=%x\n",
 			pfsm_forwarder->fwd_netdev_name, oru_fwd_etype);
 		return 0;
 	}

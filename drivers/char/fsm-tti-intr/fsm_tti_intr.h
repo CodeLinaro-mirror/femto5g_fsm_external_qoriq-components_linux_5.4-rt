@@ -23,33 +23,22 @@
 #include <linux/platform_device.h>
 
 #include <linux/fsm_tti_intr_if.h>
-#include <linux/fsm_ipc_logging.h>
 
 
 #define FSM_TTI_MODULE_NAME	"fsm-tti"
 #define FSM_TTI_DEV_CLASS_NAME	FSM_TTI_MODULE_NAME
 #define FSM_TTI_CDEV_NAME	FSM_TTI_MODULE_NAME
 
-/* ipc logging */
-extern void *fsm_tti_ipc_log;
-
-#define FSM_TTI_DEBUG(__msg, ...) \
-	FSM_IPC_LOG_DEBUG(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
-
-#define FSM_TTI_INFO(__msg, ...) \
-	FSM_IPC_LOG_INFO(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
-
-#define FSM_TTI_ERROR(__msg, ...) \
-	FSM_IPC_LOG_ERROR(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
-
-#define FSM_TTI_WARN(__msg, ...) \
-	FSM_IPC_LOG_WARN(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+#define FSM_TTI_DEBUG	pr_debug
+#define FSM_TTI_INFO	pr_info
+#define FSM_TTI_ERROR	pr_err
+#define FSM_TTI_WARN	pr_warn
 
 #define FSM_TTI_GPIO_NAME	"tti-gpio"
 #define FSM_TTI_PAGE_SIZE	PAGE_SIZE
 #define FSM_TTI_MAX_NAME_LEN	32
 
-#define MAX_FSM_TTI_DEVICE 1
+#define MAX_FSM_TTI_DEVICE 2
 
 /* Info for tti interrupt gpio platform */
 struct fsm_tti_gpio_platform_data {

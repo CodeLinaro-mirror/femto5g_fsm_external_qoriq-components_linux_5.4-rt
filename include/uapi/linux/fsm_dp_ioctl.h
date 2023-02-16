@@ -1,5 +1,5 @@
 /* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -44,13 +44,6 @@
 
 #define FSM_DP_IOCTL_TX_MODE_CONFIG	\
 		_IOWR(FSM_DP_IOCTL_BASE, 6, unsigned int)
-
-#define FSM_DP_IOCTL_TX_LLC             \
-		_IOWR(FSM_DP_IOCTL_BASE, 7, struct iovec)
-
-#define FSM_DP_IOCTL_SG_TX_LLC		\
-		_IOWR(FSM_DP_IOCTL_BASE, 8, struct iovec)
-
 
 /* ioctl command for testing */
 #define FSM_DP_IOCTL_TEST_RING_WRITE	_IO(FSM_DP_IOCTL_BASE, 0x11)
@@ -129,23 +122,30 @@ struct fsm_dp_aggrhdr {
 	struct fsm_dp_aggriob iob[0]; /* nIovs fsm_dp_aggriov follows */
 } __attribute__((packed));
 
-
 /*
  * A buffer control is an area with size of
- * FSM_DP_MSG_CNTL_BLK
+ * L1_CACHE_BYTES (64 bytes for arm64).
  * It is placed at the beginging
  * of a buffer.
  * fsm_dp_buf_cntrl is placed at the
  * control area. The last
  * 4 bytes of the area is a fence defined as
+ * FSM_DP_BUFFER_FENCE_SIG
+ * The size of fsm_dp_buf_cntrl
+ * should be less  L1_CACHE_BYTES.
  * User data is placed after the
- * control area.
+ * control area of L1_CACHE_BYTES size.
  * User data starts with fsm_dp_msghdr
  */
-#define FSM_DP_MSG_CNTL_BLK 256
-
-#define FSM_DP_L1_CACHE_BYTES 64
-
+#define FSM_DP_L1_CACHE_BYTES 64  /*
+				   * FSM_DP_L1_CACHE_BYTES is the same as
+				   * L1_CACHE_BYTES.
+				   * fsm_dp_ioctl.h is included in
+				   * the applications,
+				   * The symbol L1_CACHE_BYTES is defined in the
+				   * kernel, not be used here. Therefore,
+				   * it is redefined.
+				   */
 /*
  * xmit_status definition
  * If xmit errors, defined as -(error code)
@@ -155,45 +155,23 @@ struct fsm_dp_aggrhdr {
 
 /*
  * maximum mtu size for FSM DP application, including fsm_dp header
- * Note, need to make sure both sides in sync between NPU, and modem
+ * Note, need to make sure both sides in sync between NPU, and Q6
  */
-#define FSM_DP_MAX_DL_MSG_LEN   ((64 * 1024)  - FSM_DP_MSG_CNTL_BLK)
-#define FSM_DP_MAX_UL_MSG_LEN   ((64 * 1024)  - FSM_DP_MSG_CNTL_BLK)
-
-enum fsm_dp_profile_index {
-	FSM_DP_PROFILE_INDEX_0 = 0,
-	FSM_DP_PROFILE_INDEX_1 = 1,
-	FSM_DP_PROFILE_INDEX_2 = 2,
-	FSM_DP_PROFILE_INDEX_3 = 3,
-	FSM_DP_PROFILE_INDEX_MAX
-};
-
-#define FSM_DP_TS FSM_DP_PROFILE_INDEX_MAX
-#define FSM_DP_SAVE_USER_DATA 16
-
-#define FSM_DP_DL_APPL_SEND_REQ_INDEX FSM_DP_PROFILE_INDEX_0
-#define FSM_DP_DL_KERNEL_SEND_REQ_INDEX FSM_DP_PROFILE_INDEX_1
-#define FSM_DP_DL_SEND_DMA_COMP_INDEX FSM_DP_PROFILE_INDEX_2
-
-#define FSM_DP_UL_DMA_COMP_INDEX FSM_DP_PROFILE_INDEX_0
-#define FSM_DP_UL_USER_IND_INDEX FSM_DP_PROFILE_INDEX_1
-#define FSM_DP_UL_USER_RECV_INDEX FSM_DP_PROFILE_INDEX_2
-#define FSM_DP_UL_BUF_REL_INDEX FSM_DP_PROFILE_INDEX_3
+#define FSM_DP_MAX_DL_MSG_LEN   ((16 * 1024) - FSM_DP_L1_CACHE_BYTES)
+#define FSM_DP_MAX_UL_MSG_LEN   ((16 * 1024) - FSM_DP_L1_CACHE_BYTES)
 
 struct fsm_dp_buf_cntrl {
 	uint32_t signature;
 	uint32_t state;
-	struct timespec ts[FSM_DP_TS];
+	struct timespec ts;
 	int32_t xmit_status;
 	uint32_t buf_index;
-	unsigned char pkt_data[FSM_DP_SAVE_USER_DATA];
-	unsigned char spare[FSM_DP_MSG_CNTL_BLK
+	unsigned char spare[FSM_DP_L1_CACHE_BYTES
 		- sizeof(uint32_t) /* signature */
 		- sizeof(uint32_t) /* state */
-		- sizeof(struct timespec) * FSM_DP_TS /* ts */
+		- sizeof(struct timespec) /* ts */
 		- sizeof(int32_t) /* xmit_status */
 		- sizeof(uint32_t) /* buf_index */
-		- sizeof(unsigned char) * FSM_DP_SAVE_USER_DATA /* pkt_data */
 		- sizeof(uint32_t)];/* fence */
 	uint32_t fence;
 } __attribute__((packed));
@@ -233,29 +211,14 @@ struct fsm_dp_mmap_cfg {
 	__u32 cookie;	/* last parameter for mmap */
 };
 
-enum fsm_dp_ring_type {
-	FSM_DP_RING_TYPE_SINGLE = 0,
-	FSM_DP_RING_TYPE_DOUBLE = 1,
-	FSM_DP_RING_TYPE_LAST = 2,
-};
-
-#define FSM_DP_RING_NORMAL_PRIORITY FSM_DP_RING_TYPE_SINGLE
-#define FSM_DP_RING_HIGH_PRIORITY FSM_DP_RING_TYPE_DOUBLE
-
-struct fsm_struct_ring {
-	__u32 prod_head_off;            /* page offset of prod_head */
-	__u32 prod_tail_off;            /* page offset of prod_tail */
-	__u32 cons_head_off;            /* page offset of cons_head */
-	__u32 cons_tail_off;            /* page offset of cons_tail */
-	__u32 ringbuf_off;              /* page offset of ring buffer */
-};
-
 struct fsm_dp_ring_cfg {
-	struct fsm_dp_mmap_cfg mmap;    /* mmap parameters */
-	enum fsm_dp_ring_type ring_type;/* ring type */
-	__u32 size;                     /* ring size */
-	__u32 num_ring;                 /* number of rings */
-	struct fsm_struct_ring ring[FSM_DP_RING_TYPE_LAST];
+	struct fsm_dp_mmap_cfg mmap;	/* mmap parameters */
+	__u32 size;			/* ring size */
+	__u32 prod_head_off;		/* page offset of prod_head */
+	__u32 prod_tail_off;		/* page offset of prod_tail */
+	__u32 cons_head_off;		/* page offset of cons_head */
+	__u32 cons_tail_off;		/* page offset of cons_tail */
+	__u32 ringbuf_off;		/* page offset of ring buffer */
 };
 
 struct fsm_dp_mem_cfg {

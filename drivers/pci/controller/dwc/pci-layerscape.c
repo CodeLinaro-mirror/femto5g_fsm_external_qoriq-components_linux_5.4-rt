@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2014 Freescale Semiconductor.
  * Copyright 2020 NXP
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Author: Minghuan Lian <Minghuan.Lian@freescale.com>
  */
@@ -501,6 +502,11 @@ static int __init ls_pcie_probe(struct platform_device *pdev)
 	struct resource *dbi_base;
 	int ret;
 
+	unsigned int pci_domain = NXP_LX_MAX_SLOT;
+	struct device *dw_pcie_dev;
+	void __iomem *dw_pci_space;
+	bool can_force3 = false;
+
 	pcie = devm_kzalloc(dev, sizeof(*pcie), GFP_KERNEL);
 	if (!pcie)
 		return -ENOMEM;
@@ -527,6 +533,37 @@ static int __init ls_pcie_probe(struct platform_device *pdev)
 
 	if (pcie->drvdata->pf_off)
 		pcie->pf_base = pci->dbi_base + pcie->drvdata->pf_off;
+
+	ret = of_property_read_u32(dev->of_node, "linux,pci-domain",
+			&pci_domain);
+
+	if (dbi_base->start == NXP_PCIE1_ADDR ||
+		dbi_base->start == NXP_PCIE2_ADDR) {
+		void __iomem *nxp_board_cntrl;
+
+		dw_pci_space = pci->dbi_base;
+		dw_pcie_dev = dev;
+		nxp_board_cntrl = devm_ioremap_nocache(dw_pcie_dev,
+			   NXP_BOARD_INFO,
+			   NXP_BOARD_INFO_SIZE);
+		dw_svr = readl(nxp_board_cntrl +  SYSTEM_VERSION_REG);
+		if ((dw_svr & 0xffff0000) == NXP_LX_BOARD &&
+				(ret == 0 && pci_domain < NXP_LX_MAX_SLOT))
+			can_force3 = true;
+		pr_info("%s: NXP board %x, dbi_base  %p can_force3 %d\n",
+			__func__,  dw_svr, dw_pci_space, can_force3);
+		devm_iounmap(dw_pcie_dev, nxp_board_cntrl);
+	}
+
+	if (can_force3) {
+		pr_info("%s domain %d address %llx can be forced to Gen3\n",
+			__func__, pci_domain, dbi_base->start);
+		lx_force_config[pci_domain].pcie_addr = dbi_base->start;
+		lx_force_config[pci_domain].can_force3 = true;
+		lx_force_config[pci_domain].domain = pci_domain;
+		lx_force_config[pci_domain].dw_pci_space = dw_pci_space;
+		lx_force_config[pci_domain].dw_pcie_dev = dw_pcie_dev;
+	}
 
 	if (!ls_pcie_is_bridge(pcie))
 		return -ENODEV;

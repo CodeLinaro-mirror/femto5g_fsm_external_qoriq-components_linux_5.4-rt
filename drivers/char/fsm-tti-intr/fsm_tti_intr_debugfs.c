@@ -1,4 +1,5 @@
 /* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -68,7 +69,6 @@ int fsm_tti_debugfs_init(struct fsm_tti_intr_drv *tti_intr_drv)
 {
 	struct dentry *entry = NULL;
 	struct dentry *dentry = NULL;
-	int i;
 	char string[10];
 	struct fsm_tti_intr_drv *p;
 
@@ -84,18 +84,16 @@ int fsm_tti_debugfs_init(struct fsm_tti_intr_drv *tti_intr_drv)
 
 	p = tti_intr_drv;
 
-	for (i = 0; i < MAX_FSM_TTI_DEVICE; i++, p++) {
-		snprintf(string, sizeof(string), "FSM-%d", i + 1);
-		dentry = debugfs_create_dir(string, __dent);
-		entry = debugfs_create_file("stat", 0444, dentry,
-				p, &debugfs_tti_status_ops);
-		if (!entry)
-			goto error;
+	snprintf(string, sizeof(string), "FSM-%d", 1);
+	dentry = debugfs_create_dir(string, __dent);
+	entry = debugfs_create_file("stat", 0444, dentry,
+			p, &debugfs_tti_status_ops);
+	if (!entry)
+		goto error;
 
-		/* initialize the debugfs stat structure*/
-		memset(&p->debugfs_stats, 0,
-			sizeof(struct fsm_tti_internal_stats));
-	}
+	/* initialize the debugfs stat structure*/
+	memset(&p->debugfs_stats, 0,
+		sizeof(struct fsm_tti_internal_stats));
 
 	FSM_TTI_INFO("FSM-TTI: debugfs initialized\n");
 	return 0;

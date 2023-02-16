@@ -1,6 +1,7 @@
 /* Copyright (c) 2015, Sony Mobile Communications Inc.
  * Copyright (c) 2013, 2018-2019, 2021 The Linux Foundation.
  * All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +16,6 @@
 #include <linux/module.h>
 #include <linux/skbuff.h>
 #include <linux/rpmsg.h>
-#include <linux/of.h>
 
 #include "qrtr.h"
 
@@ -68,8 +68,6 @@ out:
 static int qcom_smd_qrtr_probe(struct rpmsg_device *rpdev)
 {
 	struct qrtr_smd_dev *qdev;
-	u32 net_id;
-	bool rt;
 	int rc;
 
 	qdev = devm_kzalloc(&rpdev->dev, sizeof(*qdev), GFP_KERNEL);
@@ -80,13 +78,7 @@ static int qcom_smd_qrtr_probe(struct rpmsg_device *rpdev)
 	qdev->dev = &rpdev->dev;
 	qdev->ep.xmit = qcom_smd_qrtr_send;
 
-	rc = of_property_read_u32(rpdev->dev.of_node, "qcom,net-id", &net_id);
-	if (rc < 0)
-		net_id = QRTR_EP_NET_ID_AUTO;
-
-	rt = of_property_read_bool(rpdev->dev.of_node, "qcom,low-latency");
-
-	rc = qrtr_endpoint_register(&qdev->ep, net_id, rt);
+	rc = qrtr_endpoint_register(&qdev->ep, QRTR_EP_NID_AUTO);
 	if (rc)
 		return rc;
 
