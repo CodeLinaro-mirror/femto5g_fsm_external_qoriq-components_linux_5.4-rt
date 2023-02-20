@@ -37,6 +37,7 @@
 
 /* ipc logging */
 void *fsm_oru_fwd_ipc_log = NULL;
+fsm_log_level_t fsm_oru_fwd_log_level = FSM_LOG_LEVEL_INFO;
 
 static struct fsm_oru_fwdr *pfsm_forwarder;
 static unsigned int oru_fwd_etype = ECPRI_ETHER_TYPE;
@@ -806,6 +807,28 @@ static int debugfs_create_concat_dir(struct dentry *parent)
 	return 0;
 }
 
+static ssize_t fsm_oru_fwd_log_level_select(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+{
+	fsm_log_level_t log_level;
+	if (kstrtouint_from_user(buf, count, 0, &log_level))
+		return -EFAULT;
+
+	if (log_level <= FSM_LOG_LEVEL_DEBUG &&
+			log_level >= FSM_LOG_LEVEL_EMERG) {
+		fsm_oru_fwd_log_level = log_level;
+		FSM_ORU_FWD_DEBUG("loglevel: %d\n", fsm_oru_fwd_log_level);
+	}
+	return count;
+}
+
+static const struct file_operations fsm_oru_fwd_log_level_ops = {
+	.open = fsm_log_level_open,
+	.release = single_release,
+	.read = seq_read,
+	.write = fsm_oru_fwd_log_level_select,
+};
+
 static int fsm_oru_fwd_debugfs_init(void)
 {
 	struct dentry *entry = NULL;
@@ -825,6 +848,10 @@ static int fsm_oru_fwd_debugfs_init(void)
 		goto err;
 	entry = debugfs_create_file("loopback", 0644, __dent, NULL,
 		&debugfs_fwd_loopback_ops);
+	if (!entry)
+		goto err;
+	entry = debugfs_create_file("log_level", 0664, __dent, NULL,
+		&fsm_oru_fwd_log_level_ops);
 	if (!entry)
 		goto err;
 	if (debugfs_create_traffic_dir(__dent))
@@ -2341,7 +2368,8 @@ static int fsm_oru_fwd_init(void)
 	struct workqueue_struct *wq;
 
 	fsm_enable_ipc_logging(&fsm_oru_fwd_ipc_log,
-		FSM_DEFAULT_IPC_LOG_PAGES, FSM_ORU_FWD_NAME);
+		FSM_DEFAULT_IPC_LOG_PAGES, FSM_ORU_FWD_NAME,
+		fsm_oru_fwd_log_level);
 	pfsm_forwarder = kzalloc(sizeof(*pfsm_forwarder), GFP_KERNEL);
 	if (!pfsm_forwarder)
 		return -ENOMEM;

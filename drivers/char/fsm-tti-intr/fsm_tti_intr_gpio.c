@@ -24,6 +24,7 @@
 
 /* ipc logging */
 void *fsm_tti_ipc_log = NULL;
+fsm_log_level_t fsm_tti_log_level = FSM_LOG_LEVEL_INFO;
 
 static irqreturn_t fsm_tti_gpio_irq_handler(int irq, void *irq_data)
 {
@@ -90,7 +91,8 @@ static int __init fsm_tti_intr_probe(struct platform_device *pdev)
 	int i;
 
 	fsm_enable_ipc_logging(&fsm_tti_ipc_log,
-		FSM_DEFAULT_IPC_LOG_PAGES, FSM_TTI_MODULE_NAME);
+		FSM_DEFAULT_IPC_LOG_PAGES, FSM_TTI_MODULE_NAME,
+		fsm_tti_log_level);
 
 	FSM_TTI_INFO("FSM-TTI: probing device\n");
 
