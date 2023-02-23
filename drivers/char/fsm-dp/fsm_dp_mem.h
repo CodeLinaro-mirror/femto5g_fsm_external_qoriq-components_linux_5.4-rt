@@ -96,6 +96,7 @@ struct fsm_dp_mempool_stats {
 	unsigned long invalid_buf_get;
 	unsigned long buf_put_err;
 	unsigned long buf_get_err;
+	unsigned long buf_dma_exceed;
 };
 
 #define FSM_DP_MEMPOOL_SIG 0xdeadbeef
