@@ -66,11 +66,14 @@ static void handle_rx_loopback(
 	unsigned int num,
 	bool llc)
 {
-	struct fsm_dp_msghdr *msghdr;
+	struct fsm_dp_msghdr *msghdr = NULL;
 	int ret;
 	int i;
 	struct fsm_dp_mempool *mempool = drv->mempool[FSM_DP_MEM_TYPE_UL];
 	dma_addr_t dma_addr_array[FSM_DP_MAX_IOV_SIZE];
+
+	if (num == 0)
+		return;
 
 	for (i = 0; i < num; i++) {
 		msghdr = (struct fsm_dp_msghdr *) iov[i].iov_base;
