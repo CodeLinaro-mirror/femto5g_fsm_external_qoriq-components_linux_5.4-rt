@@ -1,5 +1,6 @@
 /* Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -918,10 +919,14 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 	if (ret)
 		goto error_register;
 
+#if 0
 	mhi_cntrl->offload_wq = alloc_ordered_workqueue("offload_wq",
 			WQ_MEM_RECLAIM | WQ_HIGHPRI);
 	if (!mhi_cntrl->offload_wq)
 		goto error_register;
+#else
+	mhi_cntrl->offload_wq = NULL;
+#endif
 
 	INIT_WORK(&mhi_cntrl->reg_write_work, mhi_reg_write_work);
 	INIT_WORK(&mhi_dev->fatal_worker, mhi_qcom_fatal_worker);
@@ -937,7 +942,9 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 	return mhi_cntrl;
 
 error_free_wq:
+#if 0
 	destroy_workqueue(mhi_cntrl->offload_wq);
+#endif
 error_register:
 	mhi_free_controller(mhi_cntrl);
 

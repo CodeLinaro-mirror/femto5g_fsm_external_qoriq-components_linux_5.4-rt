@@ -722,7 +722,7 @@ static int debugfs_mempool_DL_traffic_pf_show(struct seq_file *s, void *unused)
 		" Min transfer request time %ld us, ",
 		mempool->dl_traffic_profiling.max_dma_req,
 		mempool->dl_traffic_profiling.min_dma_req);
-	seq_printf(s, " Avergage transfer request time %ld.%-3ld us\n",
+	seq_printf(s, " Average transfer request time %ld.%-3ld us\n",
 		 mempool->dl_traffic_profiling.avg_dma_req /
 			mempool->dl_traffic_profiling.frame_count,
 		(mempool->dl_traffic_profiling.avg_dma_req %
@@ -732,7 +732,7 @@ static int debugfs_mempool_DL_traffic_pf_show(struct seq_file *s, void *unused)
 		" Min transfer complete time %ld us,",
 		mempool->dl_traffic_profiling.max_dma_cmp,
 		mempool->dl_traffic_profiling.min_dma_cmp);
-	seq_printf(s, " Avergage transfer complete time %ld.%-3ld us\n",
+	seq_printf(s, " Average transfer complete time %ld.%-3ld us\n",
 		mempool->dl_traffic_profiling.avg_dma_cmp /
 			mempool->dl_traffic_profiling.frame_count,
 		(mempool->dl_traffic_profiling.avg_dma_cmp %
@@ -744,7 +744,7 @@ static int debugfs_mempool_DL_traffic_pf_show(struct seq_file *s, void *unused)
 			mempool->dl_traffic_profiling.max_frame_gap,
 			mempool->dl_traffic_profiling.min_frame_gap);
 		seq_printf(s,
-			" Avergage inter frame gap time %ld.%-3ld us\n",
+			" Average inter frame gap time %ld.%-3ld us\n",
 			mempool->dl_traffic_profiling.avg_frame_gap /
 				mempool->dl_traffic_profiling.frame_count - 1,
 			(mempool->dl_traffic_profiling.avg_frame_gap %
