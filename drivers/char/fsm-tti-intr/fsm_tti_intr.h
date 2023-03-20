@@ -23,7 +23,7 @@
 #include <linux/platform_device.h>
 
 #include <linux/fsm_tti_intr_if.h>
-#include <linux/fsm_ipc_logging.h>
+#include <linux/fsm_logging.h>
 
 
 #define FSM_TTI_MODULE_NAME	"fsm-tti"
@@ -32,18 +32,19 @@
 
 /* ipc logging */
 extern void *fsm_tti_ipc_log;
+extern fsm_log_level_t fsm_tti_log_level;
 
 #define FSM_TTI_DEBUG(__msg, ...) \
-	FSM_IPC_LOG_DEBUG(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+	FSM_LOG_DEBUG(fsm_tti_ipc_log, fsm_tti_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_TTI_INFO(__msg, ...) \
-	FSM_IPC_LOG_INFO(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+	FSM_LOG_INFO(fsm_tti_ipc_log, fsm_tti_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_TTI_ERROR(__msg, ...) \
-	FSM_IPC_LOG_ERROR(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+	FSM_LOG_ERROR(fsm_tti_ipc_log, fsm_tti_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_TTI_WARN(__msg, ...) \
-	FSM_IPC_LOG_WARN(fsm_tti_ipc_log, __msg, ##__VA_ARGS__)
+	FSM_LOG_WARN(fsm_tti_ipc_log, fsm_tti_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_TTI_GPIO_NAME	"tti-gpio"
 #define FSM_TTI_PAGE_SIZE	PAGE_SIZE

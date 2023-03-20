@@ -22,7 +22,7 @@
 
 /* ipc logging */
 void *fsm_dp_ipc_log = NULL;
-enum fsm_dp_log_level fsm_dp_log_level = FSM_DP_LOG_LEVEL_INFO;
+fsm_log_level_t fsm_dp_log_level = FSM_LOG_LEVEL_INFO;
 
 #define DEFAULT_LOOPBACK_JOB_NUM 8192
 #define FSM_DP_NAPI_WEIGHT 64
@@ -903,7 +903,8 @@ static int fsm_dp_probe(struct platform_device *pdev)
 	int ret;
 
 	fsm_enable_ipc_logging(&fsm_dp_ipc_log,
-		FSM_DEFAULT_IPC_LOG_PAGES, FSM_DP_MODULE_NAME);
+		FSM_DEFAULT_IPC_LOG_PAGES, FSM_DP_MODULE_NAME,
+		fsm_dp_log_level);
 	FSM_DP_INFO("FSM-DP: probing FSM\n");
 
 	pdrv = kzalloc(sizeof(*pdrv), GFP_KERNEL);

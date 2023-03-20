@@ -1034,53 +1034,6 @@ static int debugfs_drv_status_show(struct seq_file *s, void *unused)
 }
 DEFINE_DEBUGFS_OPS(debugfs_drv_status, debugfs_drv_status_show, NULL);
 
-static char *debugfs_log_level_to_text(enum fsm_dp_log_level log_level)
-{
-
-	switch (log_level) {
-	case FSM_DP_LOG_LEVEL_DEBUG:
-		return "FSM_DP_LOG_LEVEL_DEBUG";
-	case FSM_DP_LOG_LEVEL_INFO:
-		return "FSM_DP_LOG_LEVEL_INFO";
-	case FSM_DP_LOG_LEVEL_WARN:
-		return "FSM_DP_LOG_LEVEL_WARN";
-	case FSM_DP_LOG_LEVEL_ERROR:
-		return "FSM_DP_LOG_LEVEL_ERROR";
-	case FSM_DP_LOG_LEVEL_DISABLE:
-	default:
-		return "FSM_DP_LOG_LEVEL_DISABLE";
-	}
-	return "FSM_DP_LOG_LEVEL_DISABLE";
-}
-
-static ssize_t debugfs_log_level_write(
-	struct file *fp,
-	const char __user *buf,
-	size_t count,
-	loff_t *ppos)
-{
-	unsigned int value = 0;
-
-	if (kstrtouint_from_user(buf, count, 0, &value))
-		return -EFAULT;
-
-	if (value <=  FSM_DP_LOG_LEVEL_ERROR)
-		fsm_dp_log_level =  value;
-	else
-		fsm_dp_log_level = FSM_DP_LOG_LEVEL_DISABLE;
-	return count;
-}
-
-static int debugfs_log_level_show(struct seq_file *s, void *unused)
-{
-	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
-
-	seq_printf(s, "%s\n",
-		debugfs_log_level_to_text(fsm_dp_log_level));
-	return 0;
-}
-DEFINE_DEBUGFS_OPS(debugfs_log_level, debugfs_log_level_show,
-					debugfs_log_level_write);
 static int debugfs_drv_show(struct seq_file *s, void *unused)
 {
 	struct fsm_dp_drv *drv = (struct fsm_dp_drv *)s->private;
@@ -1092,6 +1045,27 @@ static int debugfs_drv_show(struct seq_file *s, void *unused)
 }
 DEFINE_DEBUGFS_OPS(debugfs_drv, debugfs_drv_show, NULL);
 
+static ssize_t fsm_dp_log_level_select(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+{
+	fsm_log_level_t log_level;
+	if (kstrtouint_from_user(buf, count, 0, &log_level))
+		return -EFAULT;
+
+	if (log_level <= FSM_LOG_LEVEL_DEBUG &&
+			log_level >= FSM_LOG_LEVEL_EMERG) {
+		fsm_dp_log_level = log_level;
+		FSM_DP_DEBUG("loglevel: %d\n", fsm_dp_log_level);
+	}
+	return count;
+}
+
+static const struct file_operations fsm_dp_log_level_ops = {
+	.open = fsm_log_level_open,
+	.release = single_release,
+	.read = seq_read,
+	.write = fsm_dp_log_level_select,
+};
 static int debugfs_create_loopback_dir(struct dentry *parent,
 				       struct fsm_dp_drv *drv)
 {
@@ -1342,8 +1316,8 @@ int fsm_dp_debugfs_init(struct fsm_dp_drv *drv)
 	if (!entry)
 		goto err;
 
-	entry = debugfs_create_file("log-level", 0444, __dent, drv,
-				    &debugfs_log_level_ops);
+	entry = debugfs_create_file("log_level", 0664, __dent, NULL,
+				    &fsm_dp_log_level_ops);
 	if (!entry)
 		goto err;
 

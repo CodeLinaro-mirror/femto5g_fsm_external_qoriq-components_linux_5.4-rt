@@ -27,7 +27,7 @@
 #include <linux/atomic.h>
 #include <linux/workqueue.h>
 #include <linux/fsm_dp_ioctl.h>
-#include <linux/fsm_ipc_logging.h>
+#include <linux/fsm_logging.h>
 
 #include "fsm_dp_mhi.h"
 #include "fsm_dp_mem.h"
@@ -38,69 +38,31 @@
 
 /* ipc logging */
 extern void *fsm_dp_ipc_log;
-enum fsm_dp_log_level {
-	FSM_DP_LOG_LEVEL_DEBUG = 0,
-	FSM_DP_LOG_LEVEL_INFO = 1,
-	FSM_DP_LOG_LEVEL_WARN = 2,
-	FSM_DP_LOG_LEVEL_ERROR = 3,
-	FSM_DP_LOG_LEVEL_DISABLE = 0xff,
-};
-extern enum fsm_dp_log_level fsm_dp_log_level;
+extern fsm_log_level_t fsm_dp_log_level;
 
 #define FSM_DP_DEBUG(__msg, ...) \
-	do { \
-		if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_DEBUG) \
-			FSM_IPC_LOG_DEBUG(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-	} while (0)
+	FSM_LOG_DEBUG(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_DP_INFO(__msg, ...) \
-	do { \
-		if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_INFO) \
-			FSM_IPC_LOG_INFO(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-	} while (0)
-
+	FSM_LOG_INFO(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_DP_ERROR(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_ERROR) \
-		FSM_IPC_LOG_ERROR(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
+	FSM_LOG_ERROR(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_DP_WARN(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_WARN) \
-		FSM_IPC_LOG_WARN(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_ERROR_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_ERROR) \
-		FSM_IPC_LOG_ERROR_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_WARN_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_WARN) \
-		FSM_IPC_LOG_WARN_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_INFO_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_INFO) \
-		FSM_IPC_LOG_INFO_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
+	FSM_LOG_WARN(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_DP_DEBUG_RATELIMITED(__msg, ...) \
-do { \
-	if (fsm_dp_log_level <= FSM_DP_LOG_LEVEL_DEBUG) \
-		FSM_IPC_LOG_DEBUG_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__);\
-} while (0)
-
-#define FSM_DP_WARN_RATELIMITED(__msg, ...) \
-	FSM_IPC_LOG_WARN_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
+	FSM_LOG_DEBUG_RATELIMITED(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
 
 #define FSM_DP_INFO_RATELIMITED(__msg, ...) \
-	FSM_IPC_LOG_INFO_RATELIMITED(fsm_dp_ipc_log, __msg, ##__VA_ARGS__)
+	FSM_LOG_INFO_RATELIMITED(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
+
+#define FSM_DP_ERROR_RATELIMITED(__msg, ...) \
+	FSM_LOG_ERROR_RATELIMITED(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
+
+#define FSM_DP_WARN_RATELIMITED(__msg, ...) \
+	FSM_LOG_WARN_RATELIMITED(fsm_dp_ipc_log, fsm_dp_log_level, __msg, ##__VA_ARGS__)
 
 struct vm_area_struct;
 

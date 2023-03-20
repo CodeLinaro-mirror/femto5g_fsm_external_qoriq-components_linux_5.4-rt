@@ -1,5 +1,7 @@
 /* Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
  * only version 2 as published by the Free Software Foundation.
@@ -63,6 +65,27 @@ static int debugfs_tti_status_show(struct seq_file *s, void *unused)
 
 DEFINE_DEBUGFS_OPS(debugfs_tti_status, debugfs_tti_status_show, NULL);
 
+static ssize_t fsm_tti_log_level_select(struct file *file,
+			const char __user *buf, size_t count, loff_t *ppos)
+{
+	fsm_log_level_t log_level;
+	if (kstrtouint_from_user(buf, count, 0, &log_level))
+		return -EFAULT;
+
+	if (log_level <= FSM_LOG_LEVEL_DEBUG &&
+			log_level >= FSM_LOG_LEVEL_EMERG) {
+		fsm_tti_log_level = log_level;
+		FSM_TTI_DEBUG("loglevel: %d\n", fsm_tti_log_level);
+	}
+	return count;
+}
+
+static const struct file_operations fsm_tti_log_level_ops = {
+	.open = fsm_log_level_open,
+	.release = single_release,
+	.read = seq_read,
+	.write = fsm_tti_log_level_select,
+};
 
 int fsm_tti_debugfs_init(struct fsm_tti_intr_drv *tti_intr_drv)
 {
@@ -92,6 +115,10 @@ int fsm_tti_debugfs_init(struct fsm_tti_intr_drv *tti_intr_drv)
 		if (!entry)
 			goto error;
 
+		entry = debugfs_create_file("log_level", 0664, __dent,
+				NULL, &fsm_tti_log_level_ops);
+		if (!entry)
+			goto error;
 		/* initialize the debugfs stat structure*/
 		memset(&p->debugfs_stats, 0,
 			sizeof(struct fsm_tti_internal_stats));
