@@ -919,25 +919,7 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 	if (ret)
 		goto error_register;
 
-#if 0
-	mhi_cntrl->offload_wq = alloc_ordered_workqueue("offload_wq",
-			WQ_MEM_RECLAIM | WQ_HIGHPRI);
-	if (!mhi_cntrl->offload_wq)
-		goto error_register;
-#else
-	mhi_cntrl->offload_wq = NULL;
-#endif
-
-	INIT_WORK(&mhi_cntrl->reg_write_work, mhi_reg_write_work);
 	INIT_WORK(&mhi_dev->fatal_worker, mhi_qcom_fatal_worker);
-
-	mhi_cntrl->reg_write_q = kcalloc(REG_WRITE_QUEUE_LEN,
-					sizeof(*mhi_cntrl->reg_write_q),
-					GFP_KERNEL);
-	if (!mhi_cntrl->reg_write_q)
-		goto error_free_wq;
-
-	atomic_set(&mhi_cntrl->write_idx, -1);
 
 	return mhi_cntrl;
 

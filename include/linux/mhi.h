@@ -1,4 +1,5 @@
 /* Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -429,13 +430,6 @@ struct mhi_controller {
 	void *cntrl_log_buf;
 	struct dentry *dentry;
 	struct dentry *parent;
-
-	/* for reg write offload */
-	struct workqueue_struct *offload_wq;
-	struct work_struct reg_write_work;
-	struct reg_write_info *reg_write_q;
-	atomic_t write_idx;
-	u32 read_idx;
 
 	bool mhi_removed;
 	bool force_re_enum;

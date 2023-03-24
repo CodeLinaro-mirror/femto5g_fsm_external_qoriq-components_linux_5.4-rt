@@ -1,4 +1,5 @@
 /* Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -881,8 +882,6 @@ int mhi_init_sfr(struct mhi_controller *mhi_cntrl);
 void mhi_create_sysfs(struct mhi_controller *mhi_cntrl);
 void mhi_destroy_sysfs(struct mhi_controller *mhi_cntrl);
 int mhi_early_notify_device(struct device *dev, void *data);
-void mhi_write_reg_offload(struct mhi_controller *mhi_cntrl,
-			void __iomem *base, u32 offset, u32 val);
 
 /* timesync log support */
 static inline void mhi_timesync_log(struct mhi_controller *mhi_cntrl)
@@ -953,8 +952,6 @@ void mhi_rddm_prepare(struct mhi_controller *mhi_cntrl,
 void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl);
 int mhi_prepare_channel(struct mhi_controller *mhi_cntrl,
 			struct mhi_chan *mhi_chan);
-void mhi_reset_reg_write_q(struct mhi_controller *mhi_cntrl);
-void mhi_force_reg_write(struct mhi_controller *mhi_cntrl);
 void mhi_perform_soc_reset(struct mhi_controller *mhi_cntrl);
 
 /* isr handlers */

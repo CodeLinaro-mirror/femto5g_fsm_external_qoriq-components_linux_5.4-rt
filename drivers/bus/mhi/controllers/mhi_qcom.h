@@ -1,4 +1,5 @@
 /* Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -89,32 +90,6 @@ int mhi_pci_probe(struct pci_dev *pci_dev,
 void mhi_pci_remove(struct pci_dev *pci_dev);
 int mhi_arch_link_resume(struct mhi_controller *mhi_cntrl);
 int mhi_arch_link_suspend(struct mhi_controller *mhi_cntrl);
-
-void mhi_reg_write_work(struct work_struct *w)
-{
-	struct mhi_controller *mhi_cntrl = container_of(w,
-		struct mhi_controller,
-		reg_write_work);
-	struct reg_write_info *info = &mhi_cntrl->reg_write_q[mhi_cntrl->read_idx];
-
-	if (!info->valid)
-		return;
-
-	if (!mhi_is_active(mhi_cntrl->mhi_dev))
-		return;
-
-	while (info->valid) {
-		if (!mhi_is_active(mhi_cntrl->mhi_dev))
-			break;
-
-		writel_relaxed(info->val, info->reg_addr);
-		info->valid = false;
-		mhi_cntrl->read_idx =
-			(mhi_cntrl->read_idx + 1) &
-			(REG_WRITE_QUEUE_LEN - 1);
-		info = &mhi_cntrl->reg_write_q[mhi_cntrl->read_idx];
-	}
-}
 
 static inline int mhi_arch_iommu_init(struct mhi_controller *mhi_cntrl)
 {
