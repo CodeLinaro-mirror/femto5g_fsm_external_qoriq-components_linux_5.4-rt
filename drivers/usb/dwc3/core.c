@@ -3,6 +3,7 @@
  * core.c - DesignWare USB3 DRD Controller Core file
  *
  * Copyright (C) 2010-2011 Texas Instruments Incorporated - http://www.ti.com
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Authors: Felipe Balbi <balbi@ti.com>,
  *	    Sebastian Andrzej Siewior <bigeasy@linutronix.de>
@@ -39,6 +40,11 @@
 #include "debug.h"
 
 #define DWC3_DEFAULT_AUTOSUSPEND_DELAY	5000 /* ms */
+
+#define DWC3_GSBUSCFG0	0xc100
+#define DWC3_GSBUSCFG0_CACHETYPE_SHIFT	16
+#define DWC3_GSBUSCFG0_CACHETYPE(n) ((n & 0xffff) << \
+		DWC3_GSBUSCFG0_CACHETYPE_SHIFT)
 
 /**
  * dwc3_get_dr_mode - Validates and sets dr_mode
@@ -1505,6 +1511,7 @@ static int dwc3_probe(struct platform_device *pdev)
 	int			ret;
 
 	void __iomem		*regs;
+	u32 val;
 
 	dwc = devm_kzalloc(dev, sizeof(*dwc), GFP_KERNEL);
 	if (!dwc)
@@ -1542,6 +1549,18 @@ static int dwc3_probe(struct platform_device *pdev)
 
 	dwc->regs	= regs;
 	dwc->regs_size	= resource_size(&dwc_res);
+
+	/*
+	 * If dma-coherent flag is enabled "DWC3 Snooping"
+	 * change is required.
+	 */
+	if (dev->of_node &&
+			of_property_read_bool(dev->of_node, "dma-coherent")) {
+		val = dwc3_readl(dwc->regs, DWC3_GSBUSCFG0);
+		val &= ~DWC3_GSBUSCFG0_CACHETYPE(~0);
+		val |= DWC3_GSBUSCFG0_CACHETYPE(0x2222);
+		dwc3_writel(dwc->regs, DWC3_GSBUSCFG0, val);
+	}
 
 	dwc3_get_properties(dwc);
 
