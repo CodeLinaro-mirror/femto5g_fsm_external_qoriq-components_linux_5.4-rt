@@ -551,16 +551,18 @@ static int debugfs_mempool_status_show(struct seq_file *s, void *unused)
 	if (mempool) {
 		seq_printf(s, "BufPut:                 %lu\n",
 			   mempool->stats.buf_put);
-		seq_printf(s, "InvalidBufPut:          %lu\n",
+		seq_printf(s, "InvalidBufPut:            %lu\n",
 			   mempool->stats.invalid_buf_put);
-		seq_printf(s, "ErrBufPut:              %lu\n",
+		seq_printf(s, "ErrBufPut:                %lu\n",
 			   mempool->stats.buf_put_err);
-		seq_printf(s, "BufGet:                 %lu\n",
+		seq_printf(s, "BufGet:                   %lu\n",
 			   mempool->stats.buf_get);
-		seq_printf(s, "InvalidBufGet:          %lu\n",
+		seq_printf(s, "InvalidBufGet:            %lu\n",
 			   mempool->stats.invalid_buf_get);
-		seq_printf(s, "ErrBufGet:              %lu\n",
+		seq_printf(s, "ErrBufGet:                %lu\n",
 			   mempool->stats.buf_get_err);
+		seq_printf(s, "DMA time exceed thrshold: %lu\n",
+			   mempool->stats.buf_dma_exceed);
 	}
 	return 0;
 }
@@ -671,10 +673,12 @@ void fsm_dp_register_dl_traffic(struct fsm_dp_mempool *mempool,
 		&mempool->dl_traffic_profiling.entry[cur]
 				.ts[FSM_DP_DL_KERNEL_SEND_REQ_INDEX]);
 
-	if (diff > (mempool->dl_max_dma_cmplt_time * MILISEC))
+	if (diff > (mempool->dl_max_dma_cmplt_time * MILISEC)) {
 		FSM_DP_WARN_RATELIMITED(
 			"%s: tx DMA taking %ld micro second to complete\n",
                           __func__, diff);
+		mempool->stats.buf_dma_exceed++;
+	}
 	if (diff > mempool->dl_traffic_profiling.max_dma_cmp)
 		mempool->dl_traffic_profiling.max_dma_cmp = diff;
 	if (diff < mempool->dl_traffic_profiling.min_dma_cmp)

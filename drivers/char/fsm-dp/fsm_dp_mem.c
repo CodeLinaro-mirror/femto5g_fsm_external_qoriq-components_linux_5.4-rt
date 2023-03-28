@@ -17,7 +17,7 @@
 #include "fsm_dp_mem.h"
 
 #define FSM_DP_MEMPOOL_RELEASE_DELAY	(HZ * 2)
-#define FSM_DP_MAX_DMA_CMPLT_DEFAULT	2 /* default of 2 ms */
+#define FSM_DP_MAX_DMA_CMPLT_DEFAULT	5 /* default of 5 ms */
 
 static inline struct fsm_dp_mempool *fsm_dp_mem_to_mempool(
 	struct fsm_dp_mem *mem)
