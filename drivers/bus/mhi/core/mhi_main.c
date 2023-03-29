@@ -1064,6 +1064,7 @@ void mhi_create_devices(struct mhi_controller *mhi_cntrl)
 		case DMA_BIDIRECTIONAL:
 			mhi_dev->ul_chan_id = mhi_chan->chan;
 			mhi_dev->ul_event_id = mhi_chan->er_index;
+			fallthrough;
 		case DMA_FROM_DEVICE:
 			/* we use dl_chan for offload channels */
 			mhi_dev->dl_chan = mhi_chan;
@@ -1071,6 +1072,9 @@ void mhi_create_devices(struct mhi_controller *mhi_cntrl)
 			mhi_dev->dl_xfer = mhi_chan->queue_xfer;
 			mhi_dev->dl_n_xfer = mhi_chan->queue_n_xfer;
 			mhi_dev->dl_event_id = mhi_chan->er_index;
+			break;
+		default:
+			break;
 		}
 
 		mhi_chan->mhi_dev = mhi_dev;
@@ -1595,6 +1599,7 @@ int mhi_process_tsync_ev_ring(struct mhi_controller *mhi_cntrl,
 	struct mhi_event_ctxt *er_ctxt =
 		&mhi_cntrl->mhi_ctxt->er_ctxt[mhi_event->er_index];
 	struct mhi_timesync *mhi_tsync = mhi_cntrl->mhi_tsync;
+	u8 output_buffer[100];
 	u32 sequence;
 	u64 remote_time;
 	int ret = 0;
@@ -1636,8 +1641,10 @@ int mhi_process_tsync_ev_ring(struct mhi_controller *mhi_cntrl,
 	mutex_lock(&mhi_cntrl->tsync_mutex);
 
 	if (unlikely(mhi_tsync->int_sequence != sequence)) {
-		MHI_ASSERT(1, "Unexpected response:0x%x Expected:0x%x\n",
-			   sequence, mhi_tsync->int_sequence);
+		snprintf(output_buffer, sizeof(output_buffer),
+			"Unexpected response:0x%x Expected:0x%x\n", sequence,
+			mhi_tsync->int_sequence);
+		MHI_ASSERT(1, output_buffer);
 
 		mhi_device_put(mhi_cntrl->mhi_dev,
 			       MHI_VOTE_DEVICE | MHI_VOTE_BUS);
@@ -2771,7 +2778,7 @@ EXPORT_SYMBOL(mhi_get_total_descriptors);
 static int __mhi_bdf_to_controller(struct device *dev, const void *tmp)
 {
 	struct mhi_device *mhi_dev = to_mhi_device(dev);
-	struct mhi_device *match = tmp;
+	const struct mhi_device *match = tmp;
 
 	/* return any none-zero value if match */
 	if (mhi_dev->dev_type == MHI_CONTROLLER_TYPE &&

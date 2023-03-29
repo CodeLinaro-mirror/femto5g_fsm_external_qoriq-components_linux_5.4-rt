@@ -265,7 +265,7 @@ static const struct of_device_id fsm_tti_intr_of_table[] = {
 };
 MODULE_DEVICE_TABLE(of, fsm_tti_intr_of_table);
 
-static struct platform_driver __fsm_tti_intr_platform_drv = {
+static struct platform_driver __fsm_tti_intr_platform_drv_ops = {
 	.probe  = fsm_tti_intr_probe,
 	.remove = fsm_tti_intr_remove,
 	.driver = {
@@ -275,7 +275,7 @@ static struct platform_driver __fsm_tti_intr_platform_drv = {
 	},
 };
 
-module_platform_driver(__fsm_tti_intr_platform_drv);
+module_platform_driver(__fsm_tti_intr_platform_drv_ops);
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("FSM TTI interrupt driver");
 

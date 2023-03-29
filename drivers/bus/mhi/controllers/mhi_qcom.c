@@ -100,7 +100,6 @@ static void mhi_bl_remove(struct mhi_device *mhi_device)
 static void mhi_bl_dl_cb(struct mhi_device *mhi_device,
                         struct mhi_result *mhi_result)
 {
-	struct mhi_controller *mhi_cntrl = mhi_device->mhi_cntrl;
 	char *buf = mhi_result->buf_addr;
 
 	/* force a null at last character */
@@ -923,10 +922,6 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 
 	return mhi_cntrl;
 
-error_free_wq:
-#if 0
-	destroy_workqueue(mhi_cntrl->offload_wq);
-#endif
 error_register:
 	mhi_free_controller(mhi_cntrl);
 
