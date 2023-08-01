@@ -25,38 +25,6 @@
 static struct fsm_dp_drv *fsm_dp_pdrv;
 struct fsm_dp_kernel_register_db_entry fsm_dp_reg_db[FSM_DP_NUM_MSG_TYPE];
 
-#ifdef CONFIG_FSM_DP_TEST
-
-#define DEFAULT_TEST_RING_SIZE 2048
-#define TEST_RING_MMAP_COOKIE	0x80000000
-
-
-
-static int fsm_dp_test_init(struct fsm_dp_drv *pdrv)
-{
-	int ret;
-
-	ret = fsm_dp_ring_init(&pdrv->test_ring.ring,
-			       DEFAULT_TEST_RING_SIZE,
-			       TEST_RING_MMAP_COOKIE);
-	return ret;
-}
-
-static void fsm_dp_test_cleanup(struct fsm_dp_drv *pdrv)
-{
-	fsm_dp_ring_cleanup(&pdrv->test_ring.ring);
-}
-#else
-static int fsm_dp_test_init(struct fsm_dp_drv *pdrv)
-{
-	return 0;
-}
-
-static void fsm_dp_test_cleanup(struct fsm_dp_drv *pdrv)
-{
-}
-#endif
-
 static void handle_rx_loopback(
 	struct fsm_dp_drv *drv,
 	struct iovec *iov,
@@ -779,8 +747,6 @@ static int fsm_dp_core_init(struct fsm_dp_drv *pdrv)
 		ret = fsm_dp_loopback_init(&p->loopback);
 		if (ret)
 			goto exit;
-
-		ret = fsm_dp_test_init(p);
 	}
 
 exit:
@@ -797,7 +763,6 @@ static void fsm_dp_core_cleanup(struct fsm_dp_drv *pdrv)
 	for (i = 0, p = pdrv; i < MAX_FSM_DP_DEVICE; i++, p++) {
 		fsm_dp_rx_cleanup(p);
 		fsm_dp_loopback_cleanup(&p->loopback);
-		fsm_dp_test_cleanup(p);
 	}
 	kfree(pdrv);
 }
